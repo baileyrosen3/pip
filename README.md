@@ -126,6 +126,10 @@ omarchy plugin add https://github.com/baileyrosen3/pip --enable
 
 Pip's mini eyes appear in your bar, and his server starts with the Omarchy shell. Click the eyes for his menu.
 
+If anything is missing, **Finish setting up Pip** appears at the top of that menu. It checks the packages above, writable `/dev/uinput`, `pipctl` on PATH, Tailscale with MagicDNS and HTTPS, Hyprland **0.56+**, and Quickshell **0.3+**. Each fix shows its exact command and opens Omarchy's floating terminal; press Enter there to approve it. Nothing installs silently. Press **Check again** after a fix; checks also refresh at startup and every five minutes. The phone only shows a quiet “Finish setup on your computer” note until everything is ready.
+
+The computer-control permission fix installs Pip's own [`system/70-pip-uinput.rules`](system/70-pip-uinput.rules) into `/etc/udev/rules.d/` and [`system/pip-uinput.conf`](system/pip-uinput.conf) into `/etc/modules-load.d/`, then loads `uinput` and reloads/triggers udev. The rule uses `TAG+="uaccess"` to grant the active desktop user access; the modules-load file makes the device available after reboot. This requires sudo in the visible terminal, not another application's permission rule. Allowing device access does **not** turn on Pip's computer control; that remains an explicit setting.
+
 ### 3. Your phone
 
 1. Set up Tailscale on the computer if you haven't: `omarchy-install-service-tailscale`, then enable **MagicDNS** and **HTTPS Certificates** in the [Tailscale admin console](https://login.tailscale.com/admin/dns).

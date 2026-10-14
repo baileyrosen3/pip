@@ -9,6 +9,7 @@ import { Tools } from './tools';
 import { Voice } from './voice';
 import { Tailscale } from './tailscale';
 import { OmarchyTheme } from './theme';
+import { Checks, checkEnvironment } from './checks';
 type Client = { id: string; name: string; clientId: string; authorized: boolean; autoPaired: boolean };
 type PlaybackItem = import('./live-provider').PlaybackItem;
 const config = new Configuration();
@@ -18,6 +19,7 @@ const theme = new OmarchyTheme();
 await notes.init();
 const tools = new Tools(agent, shell, config), voice = new Voice(config, notes, tools);
 const tailscale = new Tailscale(config);
+const checks = new Checks(await checkEnvironment());
 const clients = new Set<ServerWebSocket<Client>>();
 let micOwner: ServerWebSocket<Client> | undefined;
 let lastAudioItem: { id: string; index: number } | undefined;
@@ -27,13 +29,13 @@ let currentActivity: string | null = null;
 let faceTimer: NodeJS.Timeout | undefined;
 let overlayWasConnected = false;
 function status() {
-  return { op: 'status', phones: [...clients].map(c => c.data.name), awake: voice.state !== 'asleep', state: voice.state, provider: config.settings.provider, voice: config.settings.voice, voiceName: config.settings.voiceName, hasKey: config.hasKey, keys: config.keys, computerControl: config.settings.computerControl, host: hostname(), pairUrl: tailscale.status.url ? `${tailscale.status.url}/#token=${config.secrets.pairToken}` : '', tailscale: tailscale.status, shell: { listening: true, overlay: shell.connected, bars: shell.barCount, path: shell.path }, agentReady: agent.ready };
+  return { op: 'status', checks: checks.items, setup: checks.setup, phones: [...clients].map(c => c.data.name), awake: voice.state !== 'asleep', state: voice.state, provider: config.settings.provider, voice: config.settings.voice, voiceName: config.settings.voiceName, hasKey: config.hasKey, keys: config.keys, computerControl: config.settings.computerControl, host: hostname(), pairUrl: tailscale.status.url ? `${tailscale.status.url}/#token=${config.secrets.pairToken}` : '', tailscale: tailscale.status, shell: { listening: true, overlay: shell.connected, bars: shell.barCount, path: shell.path }, agentReady: agent.ready };
 }
 function statusChanged() { shell.send(status()); }
 function broadcast(packet: Record<string, unknown>) {
   const text = JSON.stringify(packet); for (const client of clients) client.send(text);
 }
-function hello(autoPaired = false) { return { t: 'hello', host: hostname(), settings: config.settings, theme: theme.colors, state: voice.state, hasKey: config.hasKey, keys: config.keys, ...(autoPaired ? { pairToken: config.secrets.pairToken } : {}) }; }
+function hello(autoPaired = false) { return { t: 'hello', setup: checks.setup, host: hostname(), settings: config.settings, theme: theme.colors, state: voice.state, hasKey: config.hasKey, keys: config.keys, ...(autoPaired ? { pairToken: config.secrets.pairToken } : {}) }; }
 function settingsChanged() {
   // The helper still owns target-monitor selection, but never draws an overlay.
   agent.send({ op: 'settings', monitor: config.settings.monitor });
@@ -100,6 +102,7 @@ function sendFace() {
 }
 async function control(cmd: string, client?: ServerWebSocket<Client>) {
   if (cmd === 'toggle') { if (voice.state === 'asleep') owner(client); voice.toggle(); return; }
+  if (cmd === 'check') { await checks.refresh(); return; }
   await tools.ctl(cmd);
   if (cmd === 'follow' || cmd === 'hide') settingsChanged();
   else statusChanged();
@@ -146,6 +149,8 @@ async function staticFile(root: string, relative: string) {
 }
 await shell.start();
 tailscale.onChange = statusChanged; await tailscale.start();
+checks.onChange = () => { statusChanged(); broadcast({ t: 'setup', setup: checks.setup }); };
+await checks.start();
 shell.send({ op: 'settings', ...config.settings, theme: theme.colors, hasKey: config.hasKey, keys: config.keys }); tools.home(); tools.awake(false); statusChanged();
 export const server = Bun.serve<Client>({ hostname: '127.0.0.1', port,
   async fetch(request, server) {
@@ -211,6 +216,7 @@ let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return; shuttingDown = true;
   const voiceFinished = voice.finish(); server.stop(true); agent.stop(); shell.stop(); tailscale.stop(); theme.stop(); clearTimeout(faceTimer);
+  checks.stop();
   await Promise.all([voiceFinished, notes.finish()]); process.exit(0);
 }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

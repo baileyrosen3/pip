@@ -14,6 +14,7 @@ PopupWindow {
     property string qrPath: ""
     property string qrError: ""
     property string generatedUrl: ""
+    readonly property var failingChecks: (client.status.checks || []).filter(function(check) { return !check.ok })
     property var previewRig: Pip.createRig(7320)
     property int previewFrame: 0
     readonly property var previewPalette: Pip.makePalette(client.theme,client.settings.color)
@@ -45,6 +46,11 @@ PopupWindow {
     function close() { if (owner && owner.close) owner.close(); else open = false }
     function setting(key, value) { var message = {ev:"settings"}; message[key] = value; client.send(message) }
     function control(cmd) { client.send({ev:"ctl",cmd:cmd}) }
+    function launchFix(command) {
+        var quoted = "'" + command.replace(/'/g, "'\\''") + "'"
+        Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation",
+            "printf '%s\\n' " + quoted + "; read -r -p 'Press Enter to run this command (Ctrl+C cancels): ' && " + command])
+    }
     function removeQr() { if (qrPath) Quickshell.execDetached(["rm","-f","--",qrPath]); qrPath = "" }
     function updateQr() {
         if (qr.running || !open || !pairUrl || generatedUrl === pairUrl) return
@@ -116,6 +122,28 @@ PopupWindow {
                     width: parent.width; height: 32
                     Text { width: parent.width-32; text:"Pip"; color:PipTheme.primary; font.family:PipTheme.tokens.font.voice.family; font.pixelSize:PipTheme.tokens.font.voice.title; font.weight:Font.DemiBold }
                     Item { width:28; height:28; PipIcon { anchors.centerIn:parent; name:"close" } TapHandler { onTapped:root.close() } }
+                }
+                Column {
+                    width: parent.width; spacing: 12; visible: root.failingChecks.length > 0
+                    Text { width:parent.width; text:"Finish setting up Pip"; color:PipTheme.primary; font.family:PipTheme.tokens.font.voice.family; font.pixelSize:PipTheme.tokens.font.voice.title; font.weight:Font.Medium }
+                    Repeater {
+                        model: root.failingChecks
+                        delegate: Column {
+                            id: checkRow
+                            required property var modelData
+                            width: parent.width; spacing: 6
+                            Text { width:parent.width; textFormat:Text.PlainText; text:checkRow.modelData.title; color:PipTheme.primary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size; font.weight:Font.DemiBold }
+                            Text { width:parent.width; textFormat:Text.PlainText; text:checkRow.modelData.detail; elide:Text.ElideRight; maximumLineCount:1; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size; Accessible.name:checkRow.modelData.detail }
+                            Text { width:parent.width; visible:!!checkRow.modelData.fix; textFormat:Text.PlainText; text:checkRow.modelData.fix ? checkRow.modelData.fix.command : ""; wrapMode:Text.WrapAnywhere; color:PipTheme.tertiary; font.family:PipTheme.tokens.font.mono.family; font.pixelSize:PipTheme.tokens.font.mono.size }
+                            PipButton {
+                                width:parent.width; implicitHeight:44; visible:!!checkRow.modelData.fix; enabled:root.client.connected
+                                text:checkRow.modelData.fix ? checkRow.modelData.fix.label : ""
+                                Accessible.role:Accessible.Button; Accessible.name:text; Accessible.onPressAction:clicked()
+                                onClicked:root.launchFix(checkRow.modelData.fix.command)
+                            }
+                        }
+                    }
+                    PipButton { width:parent.width; implicitHeight:44; text:"Check again"; enabled:root.client.connected; onClicked:root.control("check"); Accessible.role:Accessible.Button; Accessible.name:text; Accessible.onPressAction:clicked() }
                 }
                 Text { width:parent.width; textFormat:Text.PlainText; text:!root.client.connected ? "Connecting to your desktop…" : root.hasPhone ? root.client.status.phones.join(", ")+" is connected" : "Your phone is Pip’s home. Pair it below."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                 Text { width:parent.width; textFormat:Text.PlainText; text:(root.client.status.state || "asleep").toUpperCase()+"  ·  "+(root.client.status.provider || root.provider).toUpperCase()+" KEY "+(root.client.status.hasKey ? "SAVED" : "NOT SET"); wrapMode:Text.WordWrap; color:PipTheme.tertiary; font.family:PipTheme.tokens.font.mono.family; font.pixelSize:PipTheme.tokens.font.mono.size; font.letterSpacing:0.92 }

@@ -108,7 +108,7 @@ function changeSettings(update){
   if(update.provider){update.voiceName=voices[update.provider][0];if(update.provider==='gptlive')update.voice=true;}
   applySettings(update);if(!send({t:'settings',...update}))notice('Reconnect to your computer to save these preferences.');
 }
-function status(text){$('connection').textContent=connected?'':text;$('connection').hidden=connected||!text;$('session-host').textContent=connected?host:text;$('session-toggle').disabled=!connected;$('say-hi').disabled=!connected;}
+function status(text){$('connection').textContent=connected?'':text;$('connection').hidden=connected||!text;if(!connected)$('setup-note').hidden=true;$('session-host').textContent=connected?host:text;$('session-toggle').disabled=!connected;$('say-hi').disabled=!connected;}
 async function keepAwake(){
   if(!connected||document.visibilityState!=='visible'||wakeLock)return;
   if(!navigator.wakeLock){notice('Keep this tab open. Your browser cannot keep the screen awake automatically.');return;}
@@ -130,8 +130,10 @@ function connect(){
       case'hello':
         if(packet.pairToken){token=packet.pairToken;storage.set('token',token);}
         connected=true;retries=0;host=packet.host||'Your computer';
+        $('setup-note').hidden=packet.setup!=='finish setup on your computer';
         applySettings({...packet.settings,keys:packet.keys,hasKey:packet.hasKey,...(packet.theme?{theme:packet.theme}:{})});setState(packet.state||'asleep');
         status('');$('pairing').hidden=true;if(!packet.hasKey)openSheet('settings-screen');keepAwake();refreshSessions();showGestureHint();break;
+      case'setup':$('setup-note').hidden=packet.setup!=='finish setup on your computer';break;
       case'face':avatar.setFace(settings.voice?{...packet,talk:0}:packet);pointerPicker.setFace(packet);break;
       case'activity':avatar.activity(packet.name);break;
       case'state':setState(packet.state);if(packet.state==='asleep'){audio.mic(false);audio.silence();}break;

@@ -5,12 +5,19 @@ import { resolve, join } from 'node:path';
 import type { MockBrain } from './brain';
 import { Phone } from './phone';
 
+export interface ChecksFixture {
+  commands: Record<string, string | null | (string | null)[]>;
+  path?: string;
+  writable?: string[];
+  executable?: string[];
+}
 export interface ServerOptions {
   brain: MockBrain;
   /** Additional saved settings; null starts without a saved settings file. */
   settings?: Record<string, unknown> | null;
   /** Inject scenario-specific env, but isolation paths and mock brain URLs cannot be overridden. */
   env?: Record<string, string>;
+  checks?: ChecksFixture;
 }
 export interface PipServer {
   url: string;
@@ -48,6 +55,21 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
       tailscaleServe: false, ...options.settings,
     }), { mode: 0o600 });
   }
+  const checksModule = join(root, 'checks-environment.mjs');
+  if (options.checks) writeFileSync(checksModule, `
+    const fixture = ${JSON.stringify(options.checks)};
+    export default {
+      path: fixture.path || '/fixture/bin',
+      async run(args) {
+        const response = fixture.commands[args.join(' ')];
+        const value = Array.isArray(response) ? (response.length > 1 ? response.shift() : response[0]) : response;
+        if (typeof value !== 'string') throw new Error('Unavailable: ' + args.join(' '));
+        return value;
+      },
+      writable(path) { return (fixture.writable || []).includes(path); },
+      executable(path) { return (fixture.executable || []).includes(path); }
+    };
+  `);
   const env = {
     ...options.env,
     HOME: home, PATH: bin, TMPDIR: root,
@@ -57,6 +79,7 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
     DBUS_SESSION_BUS_ADDRESS: `unix:path=${join(runtime, 'bus')}`,
     PYTHONDONTWRITEBYTECODE: '1',
     PIPCTL_PORT: '0', PIPCTL_CONFIG_DIR: configDir, PIPCTL_NOTES_DIR: notesDir, PIPCTL_SHELL_SOCKET: shellSocket,
+    PIPCTL_CHECKS_ENV_MODULE: options.checks ? checksModule : '',
     PIPCTL_OPENAI_BASE: options.brain.baseURL, PIPCTL_GEMINI_BASE: options.brain.baseURL,
   };
   const ready = Promise.withResolvers<string>(), exited = Promise.withResolvers<void>();
