@@ -1,8 +1,20 @@
 # Pip
 
+<p>
+  <a href="https://omarchy.org"><img alt="Omarchy plugin" src="https://img.shields.io/badge/Omarchy-plugin-7aa2f7?style=flat-square"></a>
+  <img alt="Quickshell" src="https://img.shields.io/badge/Quickshell-QML-5c7cfa?style=flat-square">
+  <img alt="bun" src="https://img.shields.io/badge/server-bun%20%2B%20TypeScript-f9f1e1?style=flat-square&logo=bun&logoColor=black">
+  <img alt="Hyprland" src="https://img.shields.io/badge/Hyprland-0.56%2B-58a6ff?style=flat-square">
+  <img alt="Tailscale" src="https://img.shields.io/badge/phone-Tailscale-242424?style=flat-square&logo=tailscale&logoColor=white">
+  <img alt="iPhone and Android" src="https://img.shields.io/badge/iPhone%20%2B%20Android-web%20app-9ece6a?style=flat-square">
+  <a href="LICENSE"><img alt="Unlicense" src="https://img.shields.io/badge/license-Unlicense-58ad73?style=flat-square"></a>
+</p>
+
 Pip is a voice assistant for [Omarchy](https://omarchy.org) that lives on your phone. Put your phone on a stand under your monitor and it shows two eyes in your theme's colours. Talk to it and it can look at your screen, point at things with its own pointer, answer out loud, look things up, take meeting notes, and (if you turn it on) click and type for you.
 
 <p align="center"><img src="docs/readme/hero.gif" alt="Pip's eyes changing shape" width="560"></p>
+
+<p align="center"><img src="docs/ui-phone.webp" alt="Pip on a phone: a dark Omarchy-themed screen with two large eyes" width="300"></p>
 
 It's an Omarchy shell plugin plus a small web app for the phone. The phone connects to your computer over Tailscale. Your API keys stay on your computer.
 
@@ -72,6 +84,12 @@ o.bind("CTRL + ALT + S", "Pip: stop using the computer", pipctl .. " ctl stop")
 - **Computer control:** off by default. When on, Pip can click, type, press keys, scroll, drag and open apps or links, but only when you ask. It won't press SUPER shortcuts or type into password fields, and it lets go if you move the mouse. `CTRL + ALT + S` stops it.
 - **Meeting notes:** off by default. When on, the session audio is recorded on your computer and transcribed with speaker labels into `Pip Notes/`.
 - **Look:** colours follow your Omarchy theme. You can change the eye style (Flat, Glass, Glow), eye size, and the desktop pointer (Arrow, Orb, Eyes, Tile).
+
+<p align="center"><img src="docs/readme/styles.png" alt="Flat, Glass and Glow eye styles across Tokyo Night, Rosé Pine and Everforest" width="100%"></p>
+
+<p align="center"><img src="docs/readme/pointers.png" alt="Pip's four desktop pointers: Arrow, Orb, Eyes, Tile" width="100%"></p>
+
+<p align="center"><img src="docs/ui-desktop.webp" alt="Pip's pointer on the desktop with a reply above it and a research card in the corner" width="100%"></p>
 
 ## Troubleshooting
 
