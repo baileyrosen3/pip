@@ -22,7 +22,7 @@ export type PointerTrail = 'ribbon' | 'sparkles' | 'none';
 export type PointerType = 'arrow' | 'orb' | 'eyes' | 'face';
 /// When Pip answers: `talk` = whenever you finish speaking; `name` = when you say "Pip"; `hold` = only while you hold the phone screen.
 export type ReplyMode = 'talk' | 'name' | 'hold';
-export const defaults = { cursorSize: 44, glow: false, showCursor: true, phonePosition: 0.5, followMouse: true, trail: 'none' as PointerTrail, mood: 'listening', computerControl: true, monitor: 'auto', personality: '', volume: 1, color: 'theme', pointer: 'arrow' as PointerType, eyeStyle: 'flat' as 'flat' | 'glass' | 'glow', eyeSize: 1, replyMode: 'talk' as ReplyMode, tailscaleServe: false, provider: 'gemini' as Provider, voice: true, voiceName: 'Puck' };
+export const defaults = { cursorSize: 44, glow: false, showCursor: true, phonePosition: 0.5, followMouse: true, trail: 'none' as PointerTrail, mood: 'listening', computerControl: true, autoSleep: 5, monitor: 'auto', personality: '', volume: 1, color: 'theme', pointer: 'arrow' as PointerType, eyeStyle: 'flat' as 'flat' | 'glass' | 'glow', eyeSize: 1, replyMode: 'talk' as ReplyMode, tailscaleServe: false, provider: 'gemini' as Provider, voice: true, voiceName: 'Puck' };
 export type Settings = typeof defaults;
 export type Secrets = { openaiKey: string; geminiKey: string; pairToken: string };
 
@@ -56,6 +56,7 @@ export function settingsPatch(input: unknown): Partial<Settings> {
   if ('trail' in patch && !['ribbon', 'sparkles', 'none'].includes(String(patch.trail))) throw new Error('Trail must be ribbon, sparkles or none.');
   if ('pointer' in patch && !['arrow', 'orb', 'eyes', 'face'].includes(String(patch.pointer))) throw new Error('Pointer must be arrow, orb, eyes or face.');
   if ('replyMode' in patch && !['talk', 'name', 'hold'].includes(String(patch.replyMode))) throw new Error('Reply mode must be talk, name or hold.');
+  if ('autoSleep' in patch && ![0, 5, 10, 30].includes(Number(patch.autoSleep))) throw new Error('Auto-sleep must be off, 5, 10 or 30 minutes.');
   if ('provider' in patch && !isProvider(patch.provider)) throw new Error('Brain must be openai, gemini or gptlive.');
   if ('voiceName' in patch && !allVoices.has(String(patch.voiceName))) throw new Error('Choose a supported voice for this brain.');
   if (typeof patch.cursorSize === 'number') patch.cursorSize = Math.min(72, Math.max(28, patch.cursorSize));

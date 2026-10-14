@@ -84,6 +84,7 @@ export function reactPersona(p, name) {
   if (EXPRESSIONS[name]) { p.flash = name; p.flashUntil = p.time + 3; p.expressionEvent = false; }
 }
 export function activityPersona(p, name) {
+  if (name === 'drowsy') { reactPersona(p, 'nodOff'); return; }
   if (name !== null && name !== 'looking' && name !== 'pointing' && name !== 'researching' && name !== 'acting' && name !== 'error') return;
   if (name === 'error') { p.errorSince = p.time; p.errorUntil = p.time + 1.45; p.activityEvent = false; }
   else if (name !== null) p.errorUntil = 0;

@@ -49,7 +49,8 @@ const avatar=createAvatar($('face')),pairAvatar=createAvatar($('pair-avatar'));
 const pointerPicker=createPointerPicker($('pointer-picker'));
 const eyePicker=createPointerPicker($('eye-picker'),true);
 pairAvatar.setState('asleep');
-setInterval(()=>{avatar.setLevel(audio.level());avatar.setHear(audio.hearLevel());},1000/30);
+let lastHearAt=0;
+setInterval(()=>{const hear=audio.hearLevel(),now=performance.now();avatar.setLevel(audio.level());avatar.setHear(hear);if(state!=='asleep'&&hear>.10&&now-lastHearAt>1000){lastHearAt=now;send({t:'hear'});}},1000/30);
 window.addEventListener('resize',()=>{avatar.resize();pairAvatar.resize();fitCaption();});
 document.fonts.ready.then(fitCaption);
 function setState(value){
@@ -186,7 +187,7 @@ for(const provider of Object.keys(keys)){
   };
 }
 $('settings-form').onsubmit=event=>event.preventDefault();
-$('settings-form').onchange=event=>{const control=event.target,key=control.name;if(!key)return;changeSettings({[key]:control.type==='checkbox'?control.checked:control.type==='range'?Number(control.value):control.value});};
+$('settings-form').onchange=event=>{const control=event.target,key=control.name;if(!key)return;changeSettings({[key]:control.type==='checkbox'?control.checked:control.type==='range'||key==='autoSleep'?Number(control.value):control.value});};
 $('settings-form').oninput=event=>{const control=event.target;if(control.name==='cursorSize')$('cursorSize-value').value=`${control.value}px`;if(control.name==='eyeSize')changeSettings({eyeSize:Number(control.value)});};
 function renderSwatches(){
   const key=['accent','red','green','cyan','magenta','yellow'].map(k=>theme[k]).join('|');if(swatchKey===key)return;swatchKey=key;

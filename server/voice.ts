@@ -39,14 +39,43 @@ export class Voice {
   private reconnectTimer: NodeJS.Timeout | undefined;
   private attempt = 0;
   private generation = 0;
+  private autoSleepTimer: NodeJS.Timeout | undefined;
+  private idleElapsed = 0;
+  private idleUpdatedAt = performance.now();
+  private idlePaused = true;
+  private drowsy = false;
+  private autoSleepMinutes: number;
+  // Only isolated test servers set this; production always uses real minutes.
+  private readonly timeScale = Number(process.env.PIPCTL_TEST_TIME_SCALE) > 0 ? Number(process.env.PIPCTL_TEST_TIME_SCALE) : 1;
   broadcast: (packet: PhonePacket) => void = () => {};
   mic: (on: boolean) => void = () => {};
   audioOut?: (pcm: Uint8Array, item?: AudioItem) => void;
   audioStop?: () => void;
-  constructor(private config: Configuration, private notes: Notes, private tools: Tools) {}
+  constructor(private config: Configuration, private notes: Notes, private tools: Tools) { this.autoSleepMinutes = config.settings.autoSleep; }
+  private refreshIdle(reset = false) {
+    clearTimeout(this.autoSleepTimer);
+    const now = performance.now();
+    if (!this.idlePaused) this.idleElapsed += now - this.idleUpdatedAt;
+    this.idleUpdatedAt = now;
+    if (reset || this.autoSleepMinutes !== this.config.settings.autoSleep) {
+      this.idleElapsed = 0; this.autoSleepMinutes = this.config.settings.autoSleep;
+      if (this.drowsy) { this.drowsy = false; this.tools.activity(null); }
+    }
+    this.idlePaused = !this.wantAwake || !this.autoSleepMinutes || this.holding || this.responseActive || this.playingAudio || !!this.toolsRunning || !!this.pendingChirps || this.state === 'thinking' || this.state === 'waking';
+    if (this.idlePaused) {
+      if (this.drowsy) { this.drowsy = false; this.tools.activity(null); }
+      return;
+    }
+    const remaining = this.autoSleepMinutes * 60_000 * this.timeScale - this.idleElapsed;
+    if (remaining <= 0) { this.sleep(); return; }
+    const warning = 20_000 * this.timeScale;
+    if (remaining <= warning && !this.drowsy) { this.drowsy = true; this.tools.activity('drowsy'); }
+    this.autoSleepTimer = setTimeout(() => this.refreshIdle(), Math.max(1, this.drowsy ? remaining : remaining - warning));
+  }
+  hear() { if (this.wantAwake) this.refreshIdle(true); }
   private setState(state: VoiceState) {
-    if (this.state === state) return;
-    this.state = state; this.broadcast({ t: 'state', state });
+    if (this.state !== state) { this.state = state; this.broadcast({ t: 'state', state }); }
+    this.refreshIdle();
   }
   private missingKey() {
     return this.config.settings.provider === 'gemini' ? 'Add a Gemini key (free at aistudio.google.com/apikey) or switch to OpenAI in settings.' : 'Add an OpenAI key at platform.openai.com/api-keys, or choose Gemini · free in Brain settings.';
@@ -56,6 +85,7 @@ export class Voice {
     if (!this.config.hasKey) { this.error(this.missingKey()); return; }
     this.wantAwake = true; this.connectedOnce = false; this.attempt = 0;
     this.replyAllowed = this.config.settings.replyMode === 'talk';
+    this.refreshIdle(true);
     this.setState('waking'); this.tools.awake(true); this.connect();
   }
   sleep() {
@@ -80,6 +110,7 @@ export class Voice {
   toggle() { if (this.state === 'asleep') this.wake(); else this.sleep(); }
   beginAsk() {
     this.holding = true; this.replyAllowed = this.config.settings.replyMode !== 'hold'; this.stopAudio(); this.caption('', false);
+    this.refreshIdle();
     if (this.state === 'asleep') { this.wake(); return; }
     this.live?.beginAsk?.();
     if (this.state === 'listening' || this.state === 'speaking') this.setState('asking');
@@ -99,6 +130,7 @@ export class Voice {
   sayHi() {
     if (!this.live?.connected) { this.wake(); return; }
     this.replyAllowed = true; this.responseActive = true; this.live.sayHi();
+    this.refreshIdle();
   }
   audio(bytes: Uint8Array) {
     if (!this.micOn || !this.wantAwake || bytes.length % 2) return;
@@ -123,6 +155,7 @@ export class Voice {
     this.nameAudio.length = 0; this.nameAudioBytes = 0;
   }
   configure() {
+    this.refreshIdle();
     if (!this.wantAwake || !this.live) return;
     if (!this.config.hasKey) { this.sleep(); this.error(this.missingKey()); return; }
     if (this.live.provider !== this.config.settings.provider) {
@@ -157,6 +190,7 @@ export class Voice {
         else if (this.responseWasAllowed) this.replyAllowed = true;
         this.responseID = id; this.responseActive = true; this.tools.activity(null);
         this.nameAudio.length = 0; this.nameAudioBytes = 0; this.nameAudioOverflow = false;
+        this.refreshIdle();
       },
       text: delta => { if (!current()) return; this.transcript += delta; this.showReply(); },
       audio: (pcm, item) => {
@@ -181,6 +215,7 @@ export class Voice {
       },
       userTurn: id => {
         if (!current()) return;
+        this.hear();
         const talk = this.config.settings.replyMode === 'talk', asked = this.holding || this.awaitingQuestion || talk;
         if (asked) this.askedItems.add(id);
         if (this.awaitingQuestion && !this.holding) this.awaitingQuestion = false;
@@ -190,6 +225,7 @@ export class Voice {
       },
       userWords: (id, text, final) => {
         if (!current()) return;
+        if (text.trim()) this.hear();
         const addressed = this.config.settings.replyMode === 'name' && /\bpip\b/i.test(text), alreadyAsked = this.askedItems.has(id);
         if (addressed) { this.askedItems.add(id); this.replyAllowed = true; this.responseWasAllowed = true; this.flushNameAudio(); this.showReply(); }
         if (addressed && final && !alreadyAsked && !this.responseActive && provider.provider === 'openai') { this.setState('thinking'); this.responseActive = true; provider.respond(); }
@@ -207,7 +243,7 @@ export class Voice {
         if (!current()) return;
         this.responseActive = false; this.transcript = ''; this.stopAudio(); this.caption('', false); this.finishIfQuiet();
       },
-      emptyCommit: () => { if (current()) this.awaitingQuestion = false; },
+      emptyCommit: () => { if (current()) { this.awaitingQuestion = false; this.finishIfQuiet(); } },
       error: (text, fatal) => { if (!current()) return; if (fatal) this.sleep(); this.error(text); },
       disconnected: (code, reason) => {
         if (!current()) return;
@@ -245,6 +281,7 @@ export class Voice {
   private chirp(syllables: number) {
     if (this.voiceEnabled()) return;
     this.broadcast({ t: 'chirp', syllables }); this.pendingChirps++;
+    this.refreshIdle();
     this.tools.shell.send({ op: 'talkTest', seconds: ((syllables - 1) * 108 + 158) / 1000 });
     const timer = setTimeout(() => { this.chirpTimers.delete(timer); this.pendingChirps = Math.max(0, this.pendingChirps - 1); this.finishIfQuiet(); }, (syllables - 1) * 108 + 158);
     this.chirpTimers.add(timer);
@@ -271,6 +308,7 @@ export class Voice {
     }
   }
   private finishIfQuiet() {
+    this.refreshIdle();
     if (this.pendingChirps || this.playingAudio || this.responseActive || this.toolsRunning) return;
     this.tools.activity(null);
     if (this.sleepAfterReply) { this.sleep(); return; }

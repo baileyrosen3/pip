@@ -10,6 +10,7 @@ export type BrainScript = {
   onMessage?: (message: Packet, socket: ServerWebSocket<Connection>) => boolean | void;
 };
 export interface MockBrain {
+  onRequest?: (request: Request) => Response | Promise<Response> | undefined;
   kind: BrainKind;
   baseURL: string;
   messages(type?: string): Packet[];
@@ -62,6 +63,8 @@ export function mockBrain(kind: BrainKind, script: BrainScript = {}): MockBrain 
         return Response.json({ candidates: [{ content: { parts: [{ text: '{"segments":[]}' }] } }] });
       }
       return new Response('Unknown mock brain route', { status: 404 });
+      const scripted = script.onRequest?.(request);
+      if (scripted !== undefined) return scripted;
     },
     websocket: {
       open(socket) {

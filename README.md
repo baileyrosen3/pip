@@ -85,6 +85,8 @@ Ask about anything on screen and Pip takes a look (a screenshot plus OCR of ever
 
 Pip talks back by default, with full captions under his eyes and in a quiet desktop bubble. Turn off **Talk out loud** for text and a tiny cartoon chirp instead. GPT-Live always speaks; choose a voice for any brain in settings.
 
+Pip auto-sleeps after **five idle minutes** by default, disconnecting the brain and switching the phone mic off. His eyes get drowsy 20 seconds beforehand; speaking keeps him awake. Replies, thinking, tools and holding to ask pause the timer. Choose **Off / 5 / 10 / 30 minutes** in phone settings or the bar menu.
+
 Gemini and GPT-Live's **When I say "Pip"** mode is best-effort: instructions ask them to ignore background conversation, and Pip also checks incoming transcripts. It isn't a guaranteed wake-word detector.
 
 ### 🛠️ He can use the computer (when you ask)
@@ -207,6 +209,7 @@ The **bar menu** (click his mini eyes) has everything else: wake, point, follow,
 | Talk out loud | On by default · off for text/chirps · always on for GPT-Live |
 | Voice | Provider-specific voice picker |
 | Pip answers | When I talk · When I say "Pip" · When I hold |
+| Auto-sleep | Off · 5 minutes (default) · 10 minutes · 30 minutes |
 | Colour | Theme (background + accent eyes) · Accent · your theme's swatches · custom |
 | Eyes | Flat · Glass · Glow, size 70–150% |
 | Pointer | Arrow · Orb · Eyes · Tile, 28–72 px, trail on/off |
