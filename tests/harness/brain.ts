@@ -66,10 +66,12 @@ export function mockBrain(kind: BrainKind, script: BrainScript = {}): MockBrain 
       const scripted = script.onRequest?.(request);
       if (scripted !== undefined) return scripted;
       if (request.method === 'POST' && path.endsWith('/audio/transcriptions')) {
+        received.push({ type: 'transcription.request', path });
         await request.arrayBuffer();
         return Response.json({ segments: [] });
       }
       if (request.method === 'POST' && path.endsWith(':generateContent')) {
+        received.push({ type: 'transcription.request', path });
         await request.arrayBuffer();
         return Response.json({ candidates: [{ content: { parts: [{ text: '{"segments":[]}' }] } }] });
       }

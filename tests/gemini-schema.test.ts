@@ -6,7 +6,7 @@ import { geminiConnection, geminiSetup, toGeminiFunction } from '../server/gemin
 import { friendlyLiveError } from '../server/live-provider';
 
 test('Gemini tool conversion preserves ids, required arguments and JSON types with blocking execution', () => {
-  const tools = realtimeSession({ ...defaults, provider: 'openai' }).tools;
+  const tools = realtimeSession({ ...defaults, provider: 'openai', computerControl: true }).tools;
   for (const original of tools) {
     const converted = toGeminiFunction(original);
     assert.equal(converted.name, original.name);

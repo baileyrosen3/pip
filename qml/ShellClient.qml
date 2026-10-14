@@ -8,9 +8,9 @@ Scope {
     property var transport: null
     readonly property bool connected: transport ? transport.connected : false
     readonly property string socketPath: Quickshell.env("PIPCTL_SHELL_SOCKET") || ((Quickshell.env("XDG_RUNTIME_DIR") || ("/tmp/pip-shell-" + Quickshell.env("USER"))) + "/pip/shell.sock")
-    property var settings: ({color:"theme",pointer:"arrow",eyeStyle:"flat",eyeSize:1,cursorSize:44,phonePosition:0.5,mood:"listening",followMouse:true,showCursor:true,glow:false,trail:"none",monitor:"auto",computerControl:true,replyMode:"talk",personality:"",volume:1})
+    property var settings: ({color:"theme",pointer:"arrow",eyeStyle:"flat",eyeSize:1,cursorSize:44,phonePosition:0.5,mood:"listening",followMouse:true,showCursor:true,glow:false,trail:"none",monitor:"auto",computerControl:false,notes:false,autoSleep:5,provider:"gemini",voice:true,voiceName:"Puck",replyMode:"talk",personality:"",volume:1})
     property var theme: PipTheme.theme
-    property var status: ({phones:[],awake:false,state:"asleep",hasKey:false,computerControl:true,pairUrl:""})
+    property var status: ({phones:[],awake:false,state:"asleep",hasKey:false,computerControl:false,pairUrl:""})
     property real mouseX: 0
     property real mouseY: 0
     property bool mouseOnMonitor: true

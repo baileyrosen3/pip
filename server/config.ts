@@ -22,7 +22,7 @@ export type PointerTrail = 'ribbon' | 'sparkles' | 'none';
 export type PointerType = 'arrow' | 'orb' | 'eyes' | 'face';
 /// When Pip answers: `talk` = whenever you finish speaking; `name` = when you say "Pip"; `hold` = only while you hold the phone screen.
 export type ReplyMode = 'talk' | 'name' | 'hold';
-export const defaults = { cursorSize: 44, glow: false, showCursor: true, phonePosition: 0.5, followMouse: true, trail: 'none' as PointerTrail, mood: 'listening', computerControl: true, autoSleep: 5, monitor: 'auto', personality: '', volume: 1, color: 'theme', pointer: 'arrow' as PointerType, eyeStyle: 'flat' as 'flat' | 'glass' | 'glow', eyeSize: 1, replyMode: 'talk' as ReplyMode, tailscaleServe: false, provider: 'gemini' as Provider, voice: true, voiceName: 'Puck' };
+export const defaults = { cursorSize: 44, glow: false, showCursor: true, phonePosition: 0.5, followMouse: true, trail: 'none' as PointerTrail, mood: 'listening', computerControl: false, notes: false, autoSleep: 5, monitor: 'auto', personality: '', volume: 1, color: 'theme', pointer: 'arrow' as PointerType, eyeStyle: 'flat' as 'flat' | 'glass' | 'glow', eyeSize: 1, replyMode: 'talk' as ReplyMode, tailscaleServe: false, provider: 'gemini' as Provider, voice: true, voiceName: 'Puck' };
 export type Settings = typeof defaults;
 export type Secrets = { openaiKey: string; geminiKey: string; pairToken: string };
 
@@ -71,7 +71,7 @@ export class Configuration {
     mkdirSync(configDir, { recursive: true, mode: 0o700 });
     const saved = load(join(configDir, 'secrets.json'));
     this.secrets = { openaiKey: typeof saved.openaiKey === 'string' ? saved.openaiKey : '', geminiKey: typeof saved.geminiKey === 'string' ? saved.geminiKey : '', pairToken: typeof saved.pairToken === 'string' && /^[a-f0-9]{64}$/.test(saved.pairToken) ? saved.pairToken : randomBytes(32).toString('hex') };
-    this.settings = { ...defaults, provider: this.secrets.openaiKey ? 'openai' : 'gemini', ...settingsPatch(load(join(configDir, 'config.json'))) };
+    this.settings = { ...defaults, ...settingsPatch(load(join(configDir, 'config.json'))) };
     this.normalizeVoice(this.settings);
     atomicJSON(join(configDir, 'secrets.json'), this.secrets);
     atomicJSON(join(configDir, 'config.json'), this.settings);

@@ -137,7 +137,7 @@ export class Tools {
   }
   private async runTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
     if (actionNames[name]) {
-      if (!this.config.settings.computerControl) return { text: 'The user has turned off computer control in settings. You can still look and point.' };
+      if (!this.config.settings.computerControl) return { text: 'Computer control is off. To opt in, turn on Computer control in phone settings or the bar menu and confirm the warning. You can still look and point; do not try another way to click or type.' };
       if (performance.now() < this.stoppedUntil) return { text: "The user pressed stop. Don't do anything else until they ask again." };
       return this.runAction(name, args);
     }

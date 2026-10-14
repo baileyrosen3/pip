@@ -59,7 +59,7 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
   writeFileSync(join(configDir, 'secrets.json'), JSON.stringify({ openaiKey: options.keys?.openai ?? 'mock-openai-key', geminiKey: options.keys?.gemini ?? 'mock-gemini-key', pairToken: token }), { mode: 0o600 });
   if (options.settings !== null) {
     writeFileSync(join(configDir, 'config.json'), JSON.stringify({
-      provider: options.brain.kind, replyMode: 'hold', computerControl: false, meetingNotes: false,
+      provider: options.brain.kind, replyMode: 'hold', computerControl: false, notes: false,
       tailscaleServe: false, ...options.settings,
     }), { mode: 0o600 });
   }

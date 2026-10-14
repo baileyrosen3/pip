@@ -45,7 +45,8 @@ export class Notes {
   private chunkIndex = 0;
   private chunkStarted = 0;
   private jobs = new Map<string, Promise<void>>();
-  constructor(private config: Configuration) {}
+  private notesEnabled: boolean;
+  constructor(private config: Configuration) { this.notesEnabled = config.settings.notes; }
   async init() {
     let documents = join(homedir(), 'Documents');
     try { documents = (await command(['xdg-user-dir', 'DOCUMENTS'])).trim() || documents; } catch {}
@@ -68,13 +69,24 @@ export class Notes {
     }
     this.sessions.sort((a, b) => b.started - a.started);
   }
+  configure() {
+    if (this.notesEnabled === this.config.settings.notes) return;
+    this.notesEnabled = this.config.settings.notes;
+    if (!this.notesEnabled) this.flushChunk();
+    if (this.current) this.persist(this.current);
+    if (!this.notesEnabled) return;
+    for (const session of this.sessions) for (const pending of session.pending) {
+      const raw = join(session.notesPath, 'audio', `chunk-${String(pending.index).padStart(3, '0')}.pcm`);
+      if (existsSync(raw) || existsSync(raw.replace(/\.pcm$/, '.m4a'))) this.processChunk(session, pending, raw);
+    }
+  }
   start() {
     this.end();
     const started = Date.now() / 1000, date = new Date(started * 1000);
     const two = (n: number) => String(n).padStart(2, '0');
     const id = crypto.randomUUID();
     const path = join(this.root, `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}.${two(date.getMinutes())} ${id.slice(0, 8)}`);
-    mkdirSync(join(path, 'audio'), { recursive: true, mode: 0o700 });
+    mkdirSync(path, { recursive: true, mode: 0o700 });
     const session: Session = { id, started, entries: [], notesPath: path, pending: [], provider: this.config.settings.provider };
     this.current = session; this.sessions.unshift(session); this.chunkIndex = 0;
     this.persist(session);
@@ -106,12 +118,13 @@ export class Notes {
     this.persist(this.current);
   }
   append(audio: Uint8Array) {
-    if (!this.current || !audio.length) return;
+    if (!this.config.settings.notes || !this.current || !audio.length) return;
     // Five minutes of PCM16 mono at 24 kHz. Stream to disk instead of retaining a session in RAM.
     const capacity = 24000 * 2 * 300;
     let offset = 0;
     while (offset < audio.length) {
       if (this.rawFD === null) {
+        mkdirSync(join(this.current.notesPath, 'audio'), { recursive: true, mode: 0o700 });
         this.chunkStarted = Date.now() / 1000;
         this.rawPath = join(this.current.notesPath, 'audio', `chunk-${String(this.chunkIndex).padStart(3, '0')}.pcm`);
         this.rawFD = openSync(this.rawPath, 'w', 0o600); this.chunkBytes = 0;
@@ -133,6 +146,7 @@ export class Notes {
     this.chunkBytes = 0;
   }
   private processChunk(session: Session, pending: PendingChunk, raw: string) {
+    if (!this.config.settings.notes) return;
     const id = `${session.id}:${pending.index}`;
     if (this.jobs.has(id)) return;
     const job = (async () => {
@@ -143,6 +157,7 @@ export class Notes {
           await command(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', raw, '-c:a', 'aac', '-b:a', '64k', temporary], 90_000);
           renameSync(temporary, audio); rmSync(raw);
         }
+        if (!this.config.settings.notes) return;
         const provider = session.provider ?? 'openai';
         const key = this.config.key(provider);
         if (!key) throw new Error(`No ${provider === 'gemini' ? 'Gemini' : 'OpenAI'} key; recording saved for transcription after a restart with a key.`);
@@ -170,6 +185,7 @@ export class Notes {
             else segments.push(part);
           }
         } catch (error) {
+          if (!this.config.settings.notes) return;
           console.error(`Pip: diarized transcription failed (${message(error)}), trying gpt-transcribe`);
           const json = await this.post(audio, key, { model: 'gpt-transcribe', response_format: 'json' });
           if (typeof json.text === 'string' && json.text.trim()) segments = [{ speaker: '?', start: 0, end: 0, text: json.text.trim() }];
@@ -253,8 +269,8 @@ export class Notes {
     atomicJSON(join(session.notesPath, 'session.json'), { ...session, transcribing: session.pending.length });
     const out = [`# Pip session: ${new Date(session.started * 1000).toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })}`, ''];
     if (session.ended) { const minutes = Math.trunc((session.ended - session.started) / 60); out.push(`Ended ${clock(session.ended)} (${Math.trunc(minutes / 60)}h ${minutes % 60}m).`); }
-    else out.push('Still recording.');
-    if (session.pending.length) out.push(`${session.pending.length} recording chunk(s) still being transcribed; this file updates when they're done.`);
+    else out.push(this.config.settings.notes ? 'Session awake; meeting notes are on.' : 'Session awake; meeting notes are off. No session audio is being recorded.');
+    if (session.pending.length) out.push(`${session.pending.length} recording chunk(s) ${this.config.settings.notes ? 'queued for transcription; this file updates when they are done.' : 'saved; transcription resumes when you turn meeting notes on.'}`);
     if (json.questionCount) out.push(`You asked Pip ${json.questionCount} question(s); they're marked inline below.`);
     out.push('', '## Transcript', '');
     for (const entry of displayEntries(session)) {

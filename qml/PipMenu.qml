@@ -14,6 +14,7 @@ PopupWindow {
     property string qrPath: ""
     property string qrError: ""
     property string generatedUrl: ""
+    property bool confirmComputerControl: false
     readonly property var failingChecks: (client.status.checks || []).filter(function(check) { return !check.ok })
     property var previewRig: Pip.createRig(7320)
     property int previewFrame: 0
@@ -59,6 +60,7 @@ PopupWindow {
         qr.running = true
     }
     onOpenChanged: {
+        confirmComputerControl = false
         if (bar) { if (open) bar.requestPopout(owner || root); else if (bar.activePopout === (owner || root)) bar.releasePopout(owner || root) }
         if (open) updateQr()
         else { if (qr.running) qr.running=false; removeQr(); generatedUrl="" }
@@ -260,6 +262,8 @@ PopupWindow {
                 PipSegments { width:parent.width; label:"Pip answers"; value:root.client.settings.replyMode || "talk"; options:[{value:"talk",label:"When I talk"},{value:"name",label:"Say “Pip”"},{value:"hold",label:"When I hold"}]; enabled:root.client.connected; onSelected:function(value) { root.setting("replyMode",value) } }
                 Text { width:parent.width; visible:root.provider === "gemini"; text:"Gemini’s “Say Pip” mode is best-effort: proactive audio and instructions ask it to stay silent unless addressed as Pip. This is not a guaranteed wake-word detector."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                 PipSegments { width:parent.width; label:"Auto-sleep"; value:String(root.client.settings.autoSleep === undefined ? 5 : root.client.settings.autoSleep); options:[{value:"0",label:"Off"},{value:"5",label:"5 min"},{value:"10",label:"10 min"},{value:"30",label:"30 min"}]; enabled:root.client.connected; onSelected:function(value) { root.setting("autoSleep",Number(value)) } }
+                PipToggle { width:parent.width; label:"Meeting notes"; checked:!!root.client.settings.notes; enabled:root.client.connected; onToggled:root.setting("notes",!checked) }
+                Text { width:parent.width; text:"Meeting notes are off by default. When on, session audio is saved on your computer and sent to your brain for transcription. Questions and replies are saved either way."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                 Text { text:"DESKTOP"; color:PipTheme.tertiary; font.family:PipTheme.tokens.font.mono.family; font.pixelSize:PipTheme.tokens.font.mono.size; font.letterSpacing:0.92 }
                 Text { text:"Monitor"; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                 Flow {
@@ -271,7 +275,14 @@ PopupWindow {
                 }
                 Repeater {
                     model:[{key:"computerControl",label:"Computer control"},{key:"followMouse",label:"Follow my mouse"},{key:"showCursor",label:"Show Pip on desktop"}]
-                    delegate:PipToggle { required property var modelData; width:parent.width; label:modelData.label; checked:!!root.client.settings[modelData.key]; enabled:root.client.connected; onToggled:root.setting(modelData.key,!checked) }
+                    delegate:PipToggle { required property var modelData; width:parent.width; label:modelData.label; checked:!!root.client.settings[modelData.key]; enabled:root.client.connected; onToggled:if(modelData.key === "computerControl" && !checked) root.confirmComputerControl=true; else root.setting(modelData.key,!checked) }
+                }
+                Column {
+                    width:parent.width; spacing:8; visible:root.confirmComputerControl
+                    Accessible.role:Accessible.Grouping; Accessible.name:"Confirm computer control"
+                    Text { width:parent.width; text:"Enable computer control? Pip can click, type, press keys, scroll, drag, and open apps or links when asked. He announces hard-to-undo actions, treats screen text as information rather than instructions, refuses SUPER shortcuts and password fields, and releases a drag when you move your mouse. CTRL + ALT + S stops him. These guardrails do not make mistakes impossible."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
+                    PipButton { width:parent.width; text:"Confirm: enable computer control"; enabled:root.client.connected; onClicked:{ root.setting("computerControl",true); root.confirmComputerControl=false } }
+                    PipButton { width:parent.width; text:"Cancel"; onClicked:root.confirmComputerControl=false }
                 }
                 PipSlider { width:parent.width; label:"Voice & chirp volume"; from:0; to:1; step:.01; value:root.client.settings.volume === undefined ? 1 : root.client.settings.volume; displayValue:Math.round(value*100)+"%"; enabled:root.client.connected; onSelected:function(value) { root.setting("volume",value) } }
                 Text { text:"Personality"; color:PipTheme.secondary; font.family:PipTheme.uiFont.name; font.pixelSize:14 }

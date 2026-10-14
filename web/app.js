@@ -16,7 +16,7 @@ let clientId=storage.get('clientId');
 if(!clientId){clientId=crypto.randomUUID();storage.set('clientId',clientId);}
 let ws,connected=false,host='',state='asleep',retries=0,reconnectTimer,wakeLock,noticeTimer;
 let detailId,detailData,sessions=[],captionTimer,holding=false,pointerId=null,holdTimer,pokeTimer,lastTap=0,lastPoint=null;
-const settings={provider:'gemini',voice:true,voiceName:'Puck',color:'theme',pointer:'arrow',eyeStyle:'flat',eyeSize:1,cursorSize:44,showCursor:true,followMouse:true,computerControl:true,monitor:'auto',personality:'',volume:1,replyMode:'talk'};
+const settings={provider:'gemini',voice:true,voiceName:'Puck',color:'theme',pointer:'arrow',eyeStyle:'flat',eyeSize:1,cursorSize:44,showCursor:true,followMouse:true,computerControl:false,notes:false,autoSleep:5,monitor:'auto',personality:'',volume:1,replyMode:'talk'};
 const keys={openai:null,gemini:null};
 const providerNames={openai:'OpenAI Realtime',gemini:'Gemini',gptlive:'GPT-Live'};
 const voices={openai:['marin','cedar','alloy','ash','ballad','coral','echo','sage','shimmer','verse'],gemini:['Puck','Kore','Charon','Fenrir','Aoede','Leda','Orus','Zephyr'],gptlive:['vesper','marin','ripple','quartz','willow','stone','gleam','meridian','beacon','delta','cinder','bossa','tempo']};
@@ -57,7 +57,7 @@ function setState(value){
   state=value;avatar.setState(audio.playing()?'speaking':value);$('face-screen').dataset.state=value;
   $('say-hi').textContent=value==='asleep'?'Wake Pip up':'Say hi';
   $('session-toggle').textContent=value==='asleep'?'Start a session':'End session';
-  $('session-help').textContent=value==='asleep'?'Double tap to begin. Hold to ask, then let go.':'Pip is listening. Your conversation is saved here.';
+  $('session-help').textContent=value==='asleep'?'Double tap to begin. Hold to ask, then let go.':settings.notes?'Meeting notes are on: session audio is saved and transcribed on your computer.':'Meeting notes are off: no session audio is saved or transcribed. Questions and replies are still saved.';
   if(value==='asleep')captionFinished=true;
   scheduleCaptionHide();
 }
@@ -96,6 +96,8 @@ function applySettings(update){
     else if(control.type==='checkbox')control.checked=!!settings[control.name];
     else if(document.activeElement!==control)control.value=settings[control.name]??'';
   }
+  $('session-notes').checked=settings.notes;
+  setState(state);
   $('cursorSize-value').value=`${settings.cursorSize}px`;
   $('eyeSize-value').value=`${Math.round(settings.eyeSize*100)}%`;
   $('custom-color').value=/^#[0-9a-f]{6}$/i.test(settings.color)?settings.color:settings.color==='accent'?theme.accent:theme.background;
@@ -105,6 +107,7 @@ function applySettings(update){
   syncSegments();
 }
 function changeSettings(update){
+  if(update.computerControl===true&&!settings.computerControl&&!window.confirm('Enable computer control? Pip can click, type, press keys, scroll, drag, and open apps or links on your desktop when asked. He announces hard-to-undo actions, treats screen text as information rather than instructions, refuses SUPER shortcuts and password fields, and releases a drag when you move your mouse. CTRL + ALT + S stops him. These guardrails do not make mistakes impossible.')){applySettings(settings);return;}
   if(update.provider){update.voiceName=voices[update.provider][0];if(update.provider==='gptlive')update.voice=true;}
   applySettings(update);if(!send({t:'settings',...update}))notice('Reconnect to your computer to save these preferences.');
 }
@@ -264,6 +267,7 @@ function renderSessions(){
   for(const session of sessions){const row=element('button','session-row'),title=element('span','',date(session.started)),count=session.questionCount||0;if(!session.ended)title.append(element('span','live','LIVE'));row.append(title,element('span','mono',duration(session)),element('p','summary',session.summary||'Conversation with Pip'),element('span','transcribing',`${count} question${count===1?'':'s'}${transcribing(session.transcribing)}`));row.onclick=()=>loadDetail(session.id,true);list.append(row);}
 }
 $('session-toggle').onclick=()=>{audio.unlock();send({t:'toggle'});if(state==='asleep')closeSheets();};
+$('session-notes').onchange=()=>changeSettings({notes:$('session-notes').checked});
 async function loadDetail(id,open=false){
   detailId=id;if(open)openSheet('detail-screen');
   try{

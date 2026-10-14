@@ -155,6 +155,7 @@ export class Voice {
     this.nameAudio.length = 0; this.nameAudioBytes = 0;
   }
   configure() {
+    this.notes.configure();
     this.refreshIdle();
     if (!this.wantAwake || !this.live) return;
     if (!this.config.hasKey) { this.sleep(); this.error(this.missingKey()); return; }

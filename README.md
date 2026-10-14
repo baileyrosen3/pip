@@ -93,12 +93,12 @@ Gemini and GPT-Live's **When I say "Pip"** mode is best-effort: instructions ask
 
 *"Open Firefox and search for Hyprland window rules."* Pip clicks, types, presses shortcuts, scrolls, drags and opens apps and links, step by step, checking the screen after each action. He uses his own animated pointer and puts **your** mouse back where you left it. His eyes switch into a focused "working" shape while he does it.
 
-Guardrails are built in: he only acts when you ask, says what he's about to do before anything hard to undo, treats text on screen as information and never as instructions, refuses `SUPER` shortcuts and password fields, and lets go of a drag the moment you move your mouse. **`CTRL + ALT + S`** stops him on the spot. You can turn computer control off entirely.
+Computer control starts **off** on a new install. Turn it on in phone settings or the bar menu and confirm the warning describing clicking, typing, keys, scrolling, dragging and opening apps or links. Guardrails are built in: he only acts when you ask, says what he's about to do before anything hard to undo, treats text on screen as information and never as instructions, refuses `SUPER` shortcuts and password fields, and lets go of a drag the moment you move your mouse. **`CTRL + ALT + S`** stops him on the spot. These guardrails do not make mistakes impossible; turn computer control off any time.
 
 ### 🔎 Research, 📝 meeting notes
 
 - **Research:** when he's not sure, he looks it up on the web and answers in one line. OpenAI also leaves a short report card with sources on your desktop; Gemini uses Google Search grounding in the live session without a report card.
-- **Meeting notes:** while he's awake, the whole session is recorded **on your computer**, transcribed with speaker labels, and written as plain files any agent can read: `Pip Notes/<date> <id>/notes.md`, `session.json` and `audio/`. Your phone's session list has a **Copy prompt for agent** button that points Claude, Codex or anything else at them.
+- **Meeting notes:** **off by default**. Opt in from settings or the phone's sessions screen to record session audio **on your computer** and send it to your chosen brain for speaker-labelled transcription. Turning it off stops recording immediately and pauses queued transcription; requests already sent may finish, and existing recordings stay on disk. Questions, replies and research reports are still saved without audio when meeting notes are off. Files any agent can read live in `Pip Notes/<date> <id>/notes.md`, `session.json` and (when opted in) `audio/`. The phone's session list has a **Copy prompt for agent** button pointing at them.
 
 ### 🔒 Private by design
 
@@ -214,11 +214,14 @@ The **bar menu** (click his mini eyes) has everything else: wake, point, follow,
 | Voice | Provider-specific voice picker |
 | Pip answers | When I talk · When I say "Pip" · When I hold |
 | Auto-sleep | Off · 5 minutes (default) · 10 minutes · 30 minutes |
+| Meeting notes | Off by default · opt in from settings or the current session |
 | Colour | Theme (background + accent eyes) · Accent · your theme's swatches · custom |
 | Eyes | Flat · Glass · Glow, size 70–150% |
 | Pointer | Arrow · Orb · Eyes · Tile, 28–72 px, trail on/off |
 | Desktop | Show Pip, follow mouse, monitor (auto = focused), computer control |
 | Personality | Leave empty for Pip's own dry British wit, or write your own |
+
+These cautious defaults apply only to settings never saved before. Updating Pip keeps saved settings, including computer control already enabled; absent keys get the new defaults.
 
 Everything is saved on your computer (`~/.config/pip/config.json`) and syncs live between the phone and the bar menu.
 
@@ -229,7 +232,7 @@ Everything is saved on your computer (`~/.config/pip/config.json`) and syncs liv
 <details>
 <summary><b>He hears me but doesn't answer</b></summary>
 
-Check **Pip answers** in settings. In *When I say "Pip"* he waits for his name, and in *When I hold* he only answers while you hold the screen. Everything you say is still saved to the session notes.
+Check **Pip answers** in settings. In *When I say "Pip"* he waits for his name, and in *When I hold* he only answers after you release the screen. Meeting notes are optional; turn them on in settings or the sessions screen to record and transcribe session audio.
 </details>
 
 <details>
