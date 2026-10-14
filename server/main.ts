@@ -132,10 +132,10 @@ async function packet(client: ServerWebSocket<Client>, data: Record<string, unkn
       voice.playback(data.on, items); break;
     }
     case 'bargeIn': if (client === micOwner) voice.bargeIn(); break;
+    case 'hear': if (client === micOwner) voice.hear(); break;
     case 'settings': config.update(data); settingsChanged(); break;
     case 'setKey': saveKey(data.provider, data.key); break;
     default: throw new Error('Unknown phone message.');
-    case 'hear': if (client === micOwner) voice.hear(); break;
   }
 }
 async function staticFile(root: string, relative: string) {
