@@ -29,13 +29,17 @@ export class Agent {
         this.child = null; this.ready = false;
         for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('The desktop agent disconnected.')); }
         this.pending.clear();
-        if (!this.stopped) { console.error(`Pip: desktop agent exited ${code}; restarting.`); this.schedule(); }
+        // Exit 78 = the helper is missing system packages (it printed which). Retry quietly once a minute so
+        // Pip picks the helper up after the user installs them, without filling the log.
+        if (!this.stopped && code === 78) { if (!this.missingDependencies) console.error('Pip: desktop agent is missing packages; retrying every minute.'); this.missingDependencies = true; this.schedule(60_000); }
+        else if (!this.stopped) { this.missingDependencies = false; console.error(`Pip: desktop agent exited ${code}; restarting.`); this.schedule(); }
       });
     } catch (error) { console.error(`Pip: starting agent: ${message(error)}`); this.schedule(); }
   }
-  private schedule() {
+  private missingDependencies = false;
+  private schedule(fixedDelay?: number) {
     if (this.stopped || this.restart) return;
-    const delay = Math.min(30_000, 1000 * 2 ** Math.min(this.attempt++, 5));
+    const delay = fixedDelay ?? Math.min(30_000, 1000 * 2 ** Math.min(this.attempt++, 5));
     this.restart = setTimeout(() => { this.restart = undefined; this.start(); }, delay);
   }
   private async readLines(stream: ReadableStream<Uint8Array>) {
