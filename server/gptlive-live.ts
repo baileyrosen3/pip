@@ -318,6 +318,9 @@ export class GPTLive implements LiveProvider {
     let calls = this.responseCalls.get(responseKey);
     if (!calls) this.responseCalls.set(responseKey, calls = new Set());
     calls.add(id);
+    // Backend work belongs to the same addressed request even if a spoken backchannel has drained.
+    // Resume that response identity before Voice checks permissions; this does not authorize a new turn.
+    this.callbacks.responseStart(this.captionID);
     this.callbacks.tools([{ id, name: item.name, arguments: typeof item.arguments === 'string' ? item.arguments : '{}' }]);
   }
 

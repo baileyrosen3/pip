@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import type { MockBrain } from './brain';
 import { Phone } from './phone';
+import { installDesktop } from './desktop';
 
 export interface ChecksFixture {
   commands: Record<string, string | null | (string | null)[]>;
@@ -12,7 +13,10 @@ export interface ChecksFixture {
   executable?: string[];
 }
 export interface ServerOptions {
-  brain: MockBrain;
+  brain: Pick<MockBrain, 'kind' | 'baseURL'>;
+  /** Real-API smokes supply env keys explicitly; only temp secrets are written. */
+  keys?: { openai?: string; gemini?: string };
+  desktop?: 'fake';
   /** Additional saved settings; null starts without a saved settings file. */
   settings?: Record<string, unknown> | null;
   /** Inject scenario-specific env, but isolation paths and mock brain URLs cannot be overridden. */
@@ -43,12 +47,16 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
   for (const path of [home, configDir, notesDir, runtime, bin]) mkdirSync(path, { recursive: true, mode: 0o700 });
   chmodSync(root, 0o700);
   // Run the actual helper: without a Hyprland socket it exits before opening /dev/uinput.
-  for (const name of ['python3', 'ffmpeg']) {
+  for (const name of options.desktop === 'fake' ? ['ffmpeg'] : ['python3', 'ffmpeg']) {
     const executable = Bun.which(name);
     if (executable) symlinkSync(executable, join(bin, name));
   }
+  if (options.desktop === 'fake') {
+    try { installDesktop(bin); }
+    catch (error) { rmSync(root, { recursive: true, force: true }); throw error; }
+  }
   const token = '1'.repeat(64);
-  writeFileSync(join(configDir, 'secrets.json'), JSON.stringify({ openaiKey: 'mock-openai-key', geminiKey: 'mock-gemini-key', pairToken: token }), { mode: 0o600 });
+  writeFileSync(join(configDir, 'secrets.json'), JSON.stringify({ openaiKey: options.keys?.openai ?? 'mock-openai-key', geminiKey: options.keys?.gemini ?? 'mock-gemini-key', pairToken: token }), { mode: 0o600 });
   if (options.settings !== null) {
     writeFileSync(join(configDir, 'config.json'), JSON.stringify({
       provider: options.brain.kind, replyMode: 'hold', computerControl: false, meetingNotes: false,
@@ -80,7 +88,7 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
     PYTHONDONTWRITEBYTECODE: '1',
     PIPCTL_PORT: '0', PIPCTL_CONFIG_DIR: configDir, PIPCTL_NOTES_DIR: notesDir, PIPCTL_SHELL_SOCKET: shellSocket,
     PIPCTL_CHECKS_ENV_MODULE: options.checks ? checksModule : '',
-    PIPCTL_OPENAI_BASE: options.brain.baseURL, PIPCTL_GEMINI_BASE: options.brain.baseURL,
+    ...(options.brain.baseURL ? { PIPCTL_OPENAI_BASE: options.brain.baseURL, PIPCTL_GEMINI_BASE: options.brain.baseURL } : {}),
   };
   const ready = Promise.withResolvers<string>(), exited = Promise.withResolvers<void>();
   let output = '', stopped: Promise<void> | undefined;
@@ -122,6 +130,15 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
   const timer = setTimeout(() => ready.reject(new Error(`Pip did not listen within 2 seconds:\n${output}`)), 2000);
   try {
     const url = await ready.promise;
+    if (options.desktop === 'fake') {
+      const deadline = Date.now() + 2000;
+      while (true) {
+        const status = await (await fetch(`${url}/api/status`, { headers: { Authorization: `Bearer ${token}` } })).json();
+        if (status.agentReady === true) break;
+        if (Date.now() >= deadline) throw new Error(`Fake desktop did not become ready:\n${output}`);
+        await Bun.sleep(20);
+      }
+    }
     return {
       url, pid: child.pid!, root, configDir, notesDir, shellSocket,
       logs() { return output; },

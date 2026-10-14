@@ -6,11 +6,13 @@ type Connection = { audioBytes: number; turn: number };
 export type BrainScript = {
   reply?: string;
   transcript?: string;
+  /** Exercise managed Responses delegation, with lifecycle output deliberately empty. */
+  delegatedScreen?: boolean;
   /** Return true to replace the default protocol handling, e.g. to script tools or a close. */
   onMessage?: (message: Packet, socket: ServerWebSocket<Connection>) => boolean | void;
+  onRequest?: (request: Request) => Response | Promise<Response> | undefined;
 };
 export interface MockBrain {
-  onRequest?: (request: Request) => Response | Promise<Response> | undefined;
   kind: BrainKind;
   baseURL: string;
   messages(type?: string): Packet[];
@@ -42,6 +44,13 @@ export function mockBrain(kind: BrainKind, script: BrainScript = {}): MockBrain 
       send(socket, { serverContent: { generationComplete: true, turnComplete: true } });
     } else {
       send(socket, { type: 'session.input_transcript.delta', delta: transcript, start_ms: 0, end_ms: 100 });
+      if (script.delegatedScreen) {
+        send(socket, { type: 'session.delegation.created', delegation: { id: 'mock-delegation', target: 'responses', response_id: 'mock-response' } });
+        send(socket, { type: 'response.event', delegation_id: 'mock-delegation', event: { type: 'response.created', response: { id: 'mock-response' } } });
+        send(socket, { type: 'response.event', delegation_id: 'mock-delegation', event: { type: 'response.output_item.done', item: { type: 'function_call', call_id: 'mock-screen-call', name: 'look_at_screen', arguments: '{}' } } });
+        send(socket, { type: 'response.event', delegation_id: 'mock-delegation', event: { type: 'response.completed', response: { id: 'mock-response', output: [] } } });
+        return;
+      }
       send(socket, { type: 'session.output_transcript.delta', delta: reply });
       // GPT-Live finishes a caption after the phone's playback drains; no response.done frame.
     }
@@ -54,6 +63,8 @@ export function mockBrain(kind: BrainKind, script: BrainScript = {}): MockBrain 
       }
       // Recording/transcription also stays local on revisions where meeting notes default on.
       const path = new URL(request.url).pathname;
+      const scripted = script.onRequest?.(request);
+      if (scripted !== undefined) return scripted;
       if (request.method === 'POST' && path.endsWith('/audio/transcriptions')) {
         await request.arrayBuffer();
         return Response.json({ segments: [] });
@@ -63,8 +74,6 @@ export function mockBrain(kind: BrainKind, script: BrainScript = {}): MockBrain 
         return Response.json({ candidates: [{ content: { parts: [{ text: '{"segments":[]}' }] } }] });
       }
       return new Response('Unknown mock brain route', { status: 404 });
-      const scripted = script.onRequest?.(request);
-      if (scripted !== undefined) return scripted;
     },
     websocket: {
       open(socket) {
@@ -96,6 +105,13 @@ export function mockBrain(kind: BrainKind, script: BrainScript = {}): MockBrain 
             if (value.type === 'session.start') send(socket, { type: 'session.started', session: { id: 'mock-session' } });
             if (value.type === 'session.input_audio.append' && typeof value.audio === 'string') socket.data.audioBytes += Buffer.from(value.audio, 'base64').length;
             if (value.type === 'session.instructions.append' && typeof value.content === 'string' && /finished holding|Respond to the user/.test(value.content)) answer(socket);
+            if (script.delegatedScreen && value.type === 'response.create') {
+              const output = received.messages('response.item.create').some(entry => packet(entry.item).type === 'function_call_output');
+              const image = received.messages('response.item.create').some(entry => packet(entry.item).type === 'message');
+              if (!output || !image) throw new Error('Continuation requires a tool result and backend image.');
+              send(socket, { type: 'session.output_audio.delta', delta: Buffer.from(new Int16Array(2400).fill(2000).buffer).toString('base64') });
+              send(socket, { type: 'session.output_transcript.delta', delta: reply });
+            }
             if (value.type === 'session.close') send(socket, { type: 'session.closed', session: { id: 'mock-session' } });
           }
         } catch (error) {
