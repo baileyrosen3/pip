@@ -1,0 +1,21 @@
+name: Clean install
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and test on clean Arch
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/source:ro" \
+            --workdir /source \
+            archlinux:latest bash scripts/clean-install.sh

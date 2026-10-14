@@ -9,6 +9,7 @@ Drag takeover releases immediately without warping against the user's movement.
 """
 import argparse
 import concurrent.futures
+import importlib.util
 import json
 import math
 import os
@@ -18,8 +19,28 @@ import subprocess
 import sys
 import time
 
-import gi
-from gi.repository import GLib
+# Exit 78 tells the server that retrying immediately cannot fix missing packages.
+MISSING_DEPENDENCY_EXIT = 78
+
+
+def missing_dependency(package):
+    print(f"pip-agent: missing {package} (install: omarchy pkg add python-gobject at-spi2-core)",
+          file=sys.stderr, flush=True)
+    sys.exit(MISSING_DEPENDENCY_EXIT)
+
+
+if importlib.util.find_spec("gi") is None:
+    missing_dependency("python-gobject")
+try:
+    import gi
+    from gi.repository import GLib
+except ImportError:
+    missing_dependency("python-gobject")
+try:
+    gi.require_version("Atspi", "2.0")
+    from gi.repository import Atspi
+except (ImportError, ValueError):
+    missing_dependency("at-spi2-core")
 from desktop import desktop_environment, Hyprland, UInput, FocusTracker, key_command, run_wtype
 
 TAKEOVER_ERROR = "You moved the mouse, so I stopped dragging."

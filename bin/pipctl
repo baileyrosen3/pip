@@ -6,7 +6,12 @@ import { join } from 'node:path';
 const [cmd = 'status', arg] = process.argv.slice(2);
 async function api(path: string, method = 'GET', body?: unknown) {
   const config = new Configuration();
-  const response = await fetch(`http://127.0.0.1:${port}/api/${path}`, { method, headers: { Authorization: `Bearer ${config.secrets.pairToken}`, 'Content-Type': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+  let response: Response;
+  try {
+    response = await fetch(`http://127.0.0.1:${port}/api/${path}`, { method, headers: { Authorization: `Bearer ${config.secrets.pairToken}`, 'Content-Type': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+  } catch {
+    throw new Error(`Could not reach Pip at http://127.0.0.1:${port}.\nPip runs inside the Omarchy shell. Run \`omarchy plugin list\` and check that blr.pip is enabled, then run \`omarchy restart shell\`.\nServer log: ~/.local/state/pip/server.log`);
+  }
   const data: unknown = await response.json();
   if (!response.ok) { const error = object(data); throw new Error(typeof error.error === 'string' ? error.error : `HTTP ${response.status}`); }
   return data;
@@ -59,6 +64,7 @@ try {
       console.log(`${provider === 'gemini' ? 'Gemini' : 'OpenAI'} key saved.`); break;
     }
     case 'pair': {
+      if (!Bun.which('tailscale')) throw new Error('Tailscale is not installed. Run `omarchy pkg add tailscale`, then `omarchy-install-service-tailscale`. Enable MagicDNS and HTTPS certificates in the Tailscale admin console, then run `pipctl pair` again.');
       const config = new Configuration();
       const identity = await ensureServe();
       config.update({ tailscaleServe: true });

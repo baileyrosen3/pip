@@ -111,10 +111,10 @@ Guardrails are built in: he only acts when you ask, says what he's about to do b
 ### 1. Dependencies
 
 ```bash
-omarchy pkg add bun tesseract tesseract-data-eng wtype grim ffmpeg imagemagick qrencode tailscale
+omarchy pkg add bun tesseract tesseract-data-eng wtype grim ffmpeg imagemagick qrencode tailscale python-gobject at-spi2-core
 ```
 
-Pip also uses things Omarchy already ships: Quickshell, Hyprland, Python with PyGObject, `xdg-utils`. Clicks and scrolling go through `/dev/uinput`. Arch's `uaccess` rule already lets the logged-in user write to it.
+Pip also uses things Omarchy already ships: Quickshell, Hyprland, Python and `xdg-utils`. Clicks and scrolling go through `/dev/uinput`; access is not granted by Arch by default. The first-run checklist in Pip's bar menu sets up the required permission.
 
 ### 2. The plugin
 
@@ -293,6 +293,14 @@ bin/pipctl  CLI: serve · key · pair · ctl <cmd> · status
 **Develop from a checkout:** `ln -s ~/path/to/pip ~/.config/omarchy/plugins/blr.pip && omarchy plugin enable blr.pip --section right`. The shell doesn't watch files behind a symlink, so run `omarchy restart shell` after QML changes. Server, phone and avatar changes only need a server restart (the plugin restarts it if it exits). Tests: `bun test tests/`. To tune the eyes, open the avatar lab at `docs/lab/` in a browser.
 
 Gemini's raw Live handshake uses `v1alpha` to preserve proactive audio: the deployed `v1beta` endpoint rejects `setup.proactivity` with close code 1007. The [Live API reference](https://ai.google.dev/api/live#BidiGenerateContentSetup) documents the setup fields; the [v1alpha discovery schema](https://generativelanguage.googleapis.com/$discovery/rest?version=v1alpha) includes `proactivity`. Endpoint and setup compatibility are regression-tested together in `tests/gemini-schema.test.ts`.
+
+**Clean install check:** GitHub Actions runs `scripts/clean-install.sh` in `archlinux:latest` on every push and pull request. The dependency command above is the single source of truth: the script reads that command from this README and installs exactly those packages. It clones the checkout under test, runs `bun test tests/`, builds the server, checks the home screen and shared eyes, and checks actionable helper and CLI failures. Run it locally without touching your desktop or Pip's live configuration:
+
+```bash
+docker run --rm --volume "$PWD:/source:ro" --workdir /source archlinux:latest bash scripts/clean-install.sh
+```
+
+From a Pip checkout, add `--from-github` after `scripts/clean-install.sh` to test a fresh clone of the public repository instead of the mounted checkout.
 
 ## Credits
 
