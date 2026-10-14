@@ -38,6 +38,37 @@ test('touch escalates to playful, then irritation calms without persistent hosti
   for (let i = 0; i < 3; i++) pokePersona(p, .5, .46, 'both'); assert.equal(p.flash, 'mischievous');
   step(p, 25, { state: 'listening', reducedMotion: true }); assert.equal(p.irritation, 0); assert.equal(p.act, null);
 });
+test('reduced-motion drowsiness holds lowered lids until cleared or sleep/wake', () => {
+  const p = createPersona(7);
+  stepPersona(p, 1 / 60, { state: 'listening', reducedMotion: true });
+  activityPersona(p, 'drowsy');
+  stepPersona(p, 1 / 60, { state: 'listening', reducedMotion: true });
+  assert.equal(p.pose.L.shape, 'half'); assert.equal(p.pose.R.shape, 'half');
+  assert.equal(p.pose.L.open, .55); assert.equal(p.pose.R.open, .55);
+  step(p, 7, { state: 'listening', reducedMotion: true });
+  assert.equal(p.pose.L.shape, 'half'); assert.equal(p.pose.R.shape, 'half');
+  activityPersona(p, null);
+  stepPersona(p, 1 / 60, { state: 'listening', reducedMotion: true });
+  assert.equal(p.pose.L.shape, 'dot'); assert.equal(p.pose.R.shape, 'dot');
+
+  activityPersona(p, 'drowsy');
+  stepPersona(p, 1 / 60, { state: 'waking', reducedMotion: true });
+  assert.equal(p.pose.L.shape, 'line'); assert.equal(p.pose.R.shape, 'line');
+  stepPersona(p, .2, { state: 'listening', reducedMotion: true });
+  assert.equal(p.pose.L.shape, 'dot'); assert.equal(p.pose.R.shape, 'dot');
+
+  activityPersona(p, 'drowsy');
+  stepPersona(p, 1 / 60, { state: 'asleep', reducedMotion: true });
+  assert.equal(p.pose.L.shape, 'content'); assert.equal(p.pose.R.shape, 'content');
+  stepPersona(p, 1 / 60, { state: 'listening', reducedMotion: true });
+  assert.equal(p.pose.L.shape, 'dot'); assert.equal(p.pose.R.shape, 'dot');
+
+  const moving = createPersona(8);
+  stepPersona(moving, 1 / 60, { state: 'listening' });
+  activityPersona(moving, 'drowsy');
+  assert.equal(moving.act, 'nodOff');
+});
+
 
 test('reduced motion prevents antics and activity completion releases the task pose', () => {
   const p = createPersona(5); stepPersona(p, 1 / 60, { state: 'listening', reducedMotion: true });

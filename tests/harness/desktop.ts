@@ -4,12 +4,13 @@ import { createInterface } from 'node:readline';
 import { packet } from './messages';
 
 const monitor = { name: 'SMOKE-1', x: 0, y: 0, width: 800, height: 600, scale: 1 };
+function quote(value: string) { return "'" + value.replaceAll("'", "'\\''") + "'"; }
 
 /** Stand-ins live only on the isolated server's PATH; no real desktop or input device is opened. */
-export function installDesktop(bin: string) {
-  for (const [name, mode] of [['python3', 'helper'], ['hyprctl', 'hyprctl']]) {
+export function installDesktop(bin: string, executable = process.execPath, script = import.meta.path) {
+  for (const [name, mode] of [['python3', 'helper'], ['hyprctl', 'hyprctl']] as const) {
     writeFileSync(join(bin, name),
-      `#!/bin/sh\nexec '${process.execPath}' '${import.meta.path}' '${mode}' "$@"\n`, { mode: 0o700 });
+      `#!/bin/sh\nexec ${quote(executable)} ${quote(script)} ${quote(mode)} "$@"\n`, { mode: 0o700 });
   }
   for (const name of ['magick', 'tesseract']) {
     const executable = Bun.which(name);

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mockBrain, startServer, type PipServer } from './harness';
+import { mockBrain, withServer, type PipServer } from './harness';
 import type { ChecksFixture } from './harness/server';
 
 const healthy: ChecksFixture = {
@@ -14,9 +14,7 @@ const healthy: ChecksFixture = {
 
 async function scenario(fixture: ChecksFixture, observe: (pip: PipServer) => Promise<void>) {
   const brain = mockBrain('gemini');
-  const pip = await startServer({ brain, checks: fixture });
-  try { await observe(pip); }
-  finally { await pip.stop(); await brain.stop(); }
+  await withServer({ brain, checks: fixture }, observe);
 }
 
 test('missing packages appear in status with the exact visible installation command', async () => {
@@ -142,5 +140,21 @@ test('bar shell status contains the checklist and Check again refreshes it', asy
       socket.write(JSON.stringify({ ev: 'ctl', cmd: 'check' }) + '\n');
       expect((await phone.waitFor('setup')).setup).toBe('ok');
     } finally { socket.end(); }
+  });
+});
+
+test('Check again observes fixed uinput permissions without a server restart and stays healthy', async () => {
+  await scenario({ ...healthy, writable: [[], ['/dev/uinput']] }, async pip => {
+    const phone = await pip.phone();
+    expect((await phone.waitFor('hello')).setup).toBe('finish setup on your computer');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect((await pip.request('/api/ctl', { method: 'POST', body: JSON.stringify({ cmd: 'check' }) })).status).toBe(200);
+      expect((await phone.waitFor('setup')).setup).toBe('ok');
+      const status = await (await pip.request('/api/status')).json();
+      expect(status.checks).toContainEqual({
+        id: 'uinput', ok: true, title: 'Computer control permission',
+        detail: '/dev/uinput is writable by your user.',
+      });
+    }
   });
 });

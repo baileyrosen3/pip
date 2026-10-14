@@ -199,7 +199,12 @@ class Agent:
 
     def input_device(self):
         if self.uinput is None:
-            raise RuntimeError("Cannot open /dev/uinput: "+str(self.input_error))
+            try:
+                self.uinput = UInput()
+            except Exception as e:
+                self.input_error = str(e)
+                raise RuntimeError("Cannot open /dev/uinput: "+self.input_error) from e
+            self.input_error = None
         return self.uinput
 
     def work(self, request, operation, on_done=None, input_job=False):

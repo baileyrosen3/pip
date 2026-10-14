@@ -103,7 +103,7 @@ export class Notes {
   }
   turn(itemID: string, asked: boolean, text?: string) {
     const session = this.current;
-    if (!session) return;
+    if (!session || (!asked && !this.config.settings.notes)) return;
     let entry = session.entries.find(e => e.itemID === itemID);
     if (!entry) { entry = { id: crypto.randomUUID(), kind: asked ? 'asked' : 'heard', text: '', time: Date.now() / 1000, itemID }; session.entries.push(entry); }
     if (asked) entry.kind = 'asked';
@@ -164,6 +164,7 @@ export class Notes {
         let segments: { speaker: string; start: number; end: number; text: string }[] = [];
         if (provider === 'gemini') {
           const json = await this.postGemini(audio, key);
+          if (!json) return;
           if (!Array.isArray(json.segments)) throw new Error('Gemini transcription returned no segments.');
           for (const value of json.segments) {
             const raw = object(value);
@@ -175,6 +176,7 @@ export class Notes {
           }
         } else try {
           const json = await this.post(audio, key, { model: 'gpt-4o-transcribe-diarize', response_format: 'diarized_json', chunking_strategy: 'auto' });
+          if (!json) return;
           if (!Array.isArray(json.segments)) throw new Error('Diarized transcription returned no segments.');
           for (const value of json.segments) {
             const raw = object(value);
@@ -188,6 +190,7 @@ export class Notes {
           if (!this.config.settings.notes) return;
           console.error(`Pip: diarized transcription failed (${message(error)}), trying gpt-transcribe`);
           const json = await this.post(audio, key, { model: 'gpt-transcribe', response_format: 'json' });
+          if (!json) return;
           if (typeof json.text === 'string' && json.text.trim()) segments = [{ speaker: '?', start: 0, end: 0, text: json.text.trim() }];
         }
         for (const part of segments) session.entries.push({ id: crypto.randomUUID(), kind: 'transcript', text: part.text, time: pending.started + part.start, speaker: part.speaker });
@@ -225,6 +228,7 @@ export class Notes {
       propertyOrdering: ['segments'],
     };
     const data = Buffer.from(await Bun.file(audio).arrayBuffer()).toString('base64');
+    if (!this.config.settings.notes) return null;
     const response = await fetch(`${geminiBase}/v1beta/models/gemini-3.8-flash:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
@@ -257,9 +261,11 @@ export class Notes {
     return object(JSON.parse(text));
   }
   private async post(audio: string, key: string, fields: Record<string, string>) {
+    const audioBytes = await Bun.file(audio).arrayBuffer();
     const body = new FormData();
     for (const [key, value] of Object.entries(fields)) body.set(key, value);
-    body.set('file', Bun.file(audio), 'chunk.m4a');
+    body.set('file', new Blob([audioBytes], { type: 'audio/mp4' }), 'chunk.m4a');
+    if (!this.config.settings.notes) return null;
     const response = await fetch(`${openaiBase}/audio/transcriptions`, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body, signal: AbortSignal.timeout(300_000) });
     if (!response.ok) throw new Error(`Transcription ${response.status}: ${(await response.text()).slice(0, 160)}`);
     return object(await response.json());

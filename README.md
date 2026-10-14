@@ -85,7 +85,7 @@ Ask about anything on screen and Pip takes a look (a screenshot plus OCR of ever
 
 Pip talks back by default, with full captions under his eyes and in a quiet desktop bubble. Turn off **Talk out loud** for text and a tiny cartoon chirp instead. GPT-Live always speaks; choose a voice for any brain in settings.
 
-Pip auto-sleeps after **five idle minutes** by default, disconnecting the brain and switching the phone mic off. His eyes get drowsy 20 seconds beforehand; speaking keeps him awake. Replies, thinking, tools and holding to ask pause the timer. Choose **Off / 5 / 10 / 30 minutes** in phone settings or the bar menu.
+Pip auto-sleeps after **five idle minutes** by default, disconnecting the brain and switching the phone mic off. His eyes get drowsy 20 seconds beforehand; with reduced motion they hold a half-closed pose instead of nodding off. Speaking keeps him awake. Replies, thinking, tools and holding to ask pause the timer. Choose **Off / 5 / 10 / 30 minutes** in phone settings or the bar menu.
 
 Gemini and GPT-Live's **When I say "Pip"** mode is best-effort: instructions ask them to ignore background conversation, and Pip also checks incoming transcripts. It isn't a guaranteed wake-word detector.
 
@@ -98,7 +98,7 @@ Computer control starts **off** on a new install. Turn it on in phone settings o
 ### 🔎 Research, 📝 meeting notes
 
 - **Research:** when he's not sure, he looks it up on the web and answers in one line. OpenAI also leaves a short report card with sources on your desktop; Gemini uses Google Search grounding in the live session without a report card.
-- **Meeting notes:** **off by default**. Opt in from settings or the phone's sessions screen to record session audio **on your computer** and send it to your chosen brain for speaker-labelled transcription. Turning it off stops recording immediately and pauses queued transcription; requests already sent may finish, and existing recordings stay on disk. Questions, replies and research reports are still saved without audio when meeting notes are off. Files any agent can read live in `Pip Notes/<date> <id>/notes.md`, `session.json` and (when opted in) `audio/`. The phone's session list has a **Copy prompt for agent** button pointing at them.
+- **Meeting notes:** **off by default**. Opt in from settings or the phone's sessions screen to record session audio **on your computer** and send it to your chosen brain for speaker-labelled transcription. Turning it off stops recording immediately and pauses queued transcription, including audio still being read before upload; requests already sent may finish, and existing recordings stay on disk. Questions addressed to Pip, his replies and research reports are still saved without audio when meeting notes are off; unaddressed background speech is not saved. Files any agent can read live in `Pip Notes/<date> <id>/notes.md`, `session.json` and (when opted in) `audio/`. The phone's session list has a **Copy prompt for agent** button pointing at them.
 
 ### 🔒 Private by design
 
@@ -129,6 +129,8 @@ Pip's mini eyes appear in your bar, and his server starts with the Omarchy shell
 If anything is missing, **Finish setting up Pip** appears at the top of that menu. It checks the packages above, writable `/dev/uinput`, `pipctl` on PATH, Tailscale with MagicDNS and HTTPS, Hyprland **0.56+**, and Quickshell **0.3+**. Each fix shows its exact command and opens Omarchy's floating terminal; press Enter there to approve it. Nothing installs silently. Press **Check again** after a fix; checks also refresh at startup and every five minutes. The phone only shows a quiet “Finish setup on your computer” note until everything is ready.
 
 The computer-control permission fix installs Pip's own [`system/70-pip-uinput.rules`](system/70-pip-uinput.rules) into `/etc/udev/rules.d/` and [`system/pip-uinput.conf`](system/pip-uinput.conf) into `/etc/modules-load.d/`, then loads `uinput` and reloads/triggers udev. The rule uses `TAG+="uaccess"` to grant the active desktop user access; the modules-load file makes the device available after reboot. This requires sudo in the visible terminal, not another application's permission rule. Allowing device access does **not** turn on Pip's computer control; that remains an explicit setting.
+
+After fixing `/dev/uinput` access, **Check again** refreshes the permission check and the desktop helper retries opening the device on the next input request. No Pip server or Omarchy shell restart is needed.
 
 ### 3. Your phone
 

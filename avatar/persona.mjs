@@ -60,7 +60,7 @@ export function createPersona(seed = 1) {
     pose: { L: eye(), R: eye(), merge: 0, mergeX: 0, mergeY: 0, spin: 0, tension: 1 },
     random, time: 0, state: 'listening', stateSince: 0, idleSince: 0,
     act: null, actTime: 0, actEvent: 0, cooldowns: Object.create(null), nextAct: 8 + random() * 9,
-    flash: null, flashUntil: 0, activity: null, activitySince: 0, activityEvent: false, errorUntil: 0, errorSince: 0,
+    drowsy: false,
     nextBlink: 2.5 + random() * 4, blinkTime: -1, doubleBlink: false,
     nextSaccade: 1 + random() * 2, saccadeX: 0, saccadeY: 0,
     gazeX: 0, gazeY: 0, gazeFromX: 0, gazeFromY: 0, gazeAt: -10,
@@ -84,7 +84,8 @@ export function reactPersona(p, name) {
   if (EXPRESSIONS[name]) { p.flash = name; p.flashUntil = p.time + 3; p.expressionEvent = false; }
 }
 export function activityPersona(p, name) {
-  if (name === 'drowsy') { reactPersona(p, 'nodOff'); return; }
+  if (name === 'drowsy') { p.drowsy = true; reactPersona(p, 'nodOff'); return; }
+  if (name === null) p.drowsy = false;
   if (name !== null && name !== 'looking' && name !== 'pointing' && name !== 'researching' && name !== 'acting' && name !== 'error') return;
   if (name === 'error') { p.errorSince = p.time; p.errorUntil = p.time + 1.45; p.activityEvent = false; }
   else if (name !== null) p.errorUntil = 0;
@@ -138,6 +139,7 @@ export function stepPersona(p, dt, input = DEFAULT_INPUT, engine) {
   p.reducedMotion = !!input.reducedMotion;
   const state = input.holding ? 'asking' : input.state || 'listening';
   if (state !== p.state) { p.state = state; p.stateSince = p.idleSince = t; p.wakingEvent = false; if (busy(state)) p.act = null; else p.nextAct = Math.max(p.nextAct, t + 5); }
+  if (state === 'waking' || state === 'asleep') p.drowsy = false;
   if ((busy(state) || p.activity || (p.reducedMotion && p.act !== 'blink' && p.act !== 'doubleBlink')) && p.act) p.act = null;
   resetEye(L); resetEye(R); pose.merge = pose.mergeX = pose.mergeY = pose.spin = 0; pose.tension = p.reducedMotion ? 1.1 : 1;
   const elapsed = t - p.stateSince, calm = p.reducedMotion;
@@ -230,5 +232,6 @@ export function stepPersona(p, dt, input = DEFAULT_INPUT, engine) {
       if (p.blinkTime >= (p.doubleBlink ? .46 : .22)) { p.blinkTime = -1; p.nextBlink = t + 2.8 + p.random() * 4.8; }
     }
   }
+  if (calm && p.drowsy) { L.shape = R.shape = 'half'; L.open = R.open = .55; L.y = R.y = .2; }
   return pose;
 }

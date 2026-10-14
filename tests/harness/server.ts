@@ -9,7 +9,7 @@ import { installDesktop } from './desktop';
 export interface ChecksFixture {
   commands: Record<string, string | null | (string | null)[]>;
   path?: string;
-  writable?: string[];
+  writable?: string[] | string[][];
   executable?: string[];
 }
 export interface ServerOptions {
@@ -22,6 +22,8 @@ export interface ServerOptions {
   /** Inject scenario-specific env, but isolation paths and mock brain URLs cannot be overridden. */
   env?: Record<string, string>;
   checks?: ChecksFixture;
+  /** Hold chunk reads at the filesystem seam to exercise consent changes before upload. */
+  pauseAudioReads?: boolean;
 }
 export interface PipServer {
   url: string;
@@ -74,7 +76,11 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
         if (typeof value !== 'string') throw new Error('Unavailable: ' + args.join(' '));
         return value;
       },
-      writable(path) { return (fixture.writable || []).includes(path); },
+      writable(path) {
+        const states = fixture.writable || [];
+        const paths = Array.isArray(states[0]) ? (states.length > 1 ? states.shift() : states[0]) : states;
+        return paths.includes(path);
+      },
       executable(path) { return (fixture.executable || []).includes(path); }
     };
   `);
@@ -88,12 +94,14 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
     PYTHONDONTWRITEBYTECODE: '1',
     PIPCTL_PORT: '0', PIPCTL_CONFIG_DIR: configDir, PIPCTL_NOTES_DIR: notesDir, PIPCTL_SHELL_SOCKET: shellSocket,
     PIPCTL_CHECKS_ENV_MODULE: options.checks ? checksModule : '',
+    PIPCTL_TEST_AUDIO_READ_GATE: options.pauseAudioReads ? root : '',
     ...(options.brain.baseURL ? { PIPCTL_OPENAI_BASE: options.brain.baseURL, PIPCTL_GEMINI_BASE: options.brain.baseURL } : {}),
   };
   const ready = Promise.withResolvers<string>(), exited = Promise.withResolvers<void>();
   let output = '', stopped: Promise<void> | undefined;
   const phones = new Set<Phone>();
-  const child = spawn(process.execPath, ['server/main.ts'], {
+  const preload = options.pauseAudioReads ? ['--preload', resolve(import.meta.dir, 'audio-read-gate.ts')] : [];
+  const child = spawn(process.execPath, [...preload, 'server/main.ts'], {
     cwd: resolve(import.meta.dir, '../..'), env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   });
   const signalGroup = (signal: NodeJS.Signals) => {
@@ -155,4 +163,15 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
     };
   } catch (error) { await stop(); throw error; }
   finally { clearTimeout(timer); }
+}
+
+/** Owns the brain before startup begins, including startup and scenario failures. */
+export async function withServer(options: ServerOptions & { brain: MockBrain }, observe: (pip: PipServer) => Promise<void>) {
+  let pip: PipServer | undefined;
+  try {
+    pip = await startServer(options);
+    await observe(pip);
+  } finally {
+    try { await pip?.stop(); } finally { await options.brain.stop(); }
+  }
 }

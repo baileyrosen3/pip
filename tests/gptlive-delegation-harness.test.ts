@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mockBrain, startServer } from './harness';
+import { mockBrain, withServer } from './harness';
 import { packet } from './harness/messages';
 
 test('GPT-Live delegates a screen inspection, returns OCR and an image to the backend, and speaks the verified caption', async () => {
@@ -15,8 +15,7 @@ test('GPT-Live delegates a screen inspection, returns OCR and an image to the ba
       }
     },
   });
-  const pip = await startServer({ brain, desktop: 'fake', settings: { voice: true } });
-  try {
+  await withServer({ brain, desktop: 'fake', settings: { voice: true } }, async pip => {
     const phone = await pip.phone();
     phone.wake();
     await phone.waitFor('mic', value => value.on === true);
@@ -46,7 +45,7 @@ test('GPT-Live delegates a screen inspection, returns OCR and an image to the ba
     expect(JSON.stringify(startup.input)).not.toContain('input_image');
     expect(brain.messages('session.thinking.append')).toEqual([]);
     expect(phone.messages('error')).toEqual([]);
-  } finally { await pip.stop(); await brain.stop(); }
+  });
 }, 10_000);
 
 test('GPT-Live backend can point, research, and request computer control without bypassing its guardrails', async () => {
@@ -80,8 +79,7 @@ test('GPT-Live backend can point, research, and request computer control without
       return true;
     },
   });
-  const pip = await startServer({ brain, desktop: 'fake', settings: { computerControl: true } });
-  try {
+  await withServer({ brain, desktop: 'fake', settings: { computerControl: true } }, async pip => {
     const phone = await pip.phone();
     phone.wake();
     await phone.waitFor('mic', value => value.on === true);
@@ -101,5 +99,5 @@ test('GPT-Live backend can point, research, and request computer control without
     expect(outputs[4].output).toContain('Fake desktop refuses focused');
     expect(brain.messages('response.create')).toHaveLength(5);
     expect(phone.messages('error')).toEqual([]);
-  } finally { await pip.stop(); await brain.stop(); }
+  });
 }, 10_000);
