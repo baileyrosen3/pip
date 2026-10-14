@@ -1,5 +1,5 @@
 import { Configuration, geminiBase, message, object } from './config';
-import { geminiSetup } from './gemini-session';
+import { geminiConnection, geminiSetup } from './gemini-session';
 import { friendlyLiveError, liveMessage } from './live-provider';
 import type { LiveCallbacks, LiveProvider, ToolCall, ToolOutput } from './live-provider';
 import { PCMResampler24To16 } from './resampler';
@@ -31,9 +31,8 @@ export class GeminiLive implements LiveProvider {
   connect(context: string) {
     this.close(false);
     const handle = this.resumable ? this.resumeHandle : undefined;
-    const url = new URL(geminiBase.replace(/^http/, 'ws') + '/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent');
-    this.connectionKey = this.config.key('gemini'); url.searchParams.set('key', this.connectionKey);
-    const setup = geminiSetup(this.config.settings, handle);
+    this.connectionKey = this.config.key('gemini');
+    const { url, setup } = geminiConnection(this.config.settings, geminiBase, this.connectionKey, handle);
     this.signature = JSON.stringify(geminiSetup(this.config.settings));
     const socket = new WebSocket(url.href); this.socket = socket; socket.binaryType = 'arraybuffer';
     this.timeout = setTimeout(() => { if (this.socket === socket && !this.ready) socket.close(); }, 20_000);

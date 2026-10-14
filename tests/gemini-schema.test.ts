@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { defaults } from '../server/config';
 import { realtimeSession } from '../server/session';
-import { geminiSetup, toGeminiFunction } from '../server/gemini-session';
+import { geminiConnection, geminiSetup, toGeminiFunction } from '../server/gemini-session';
+import { friendlyLiveError } from '../server/live-provider';
 
 test('Gemini tool conversion preserves ids, required arguments and JSON types with blocking execution', () => {
   const tools = realtimeSession({ ...defaults, provider: 'openai' }).tools;
@@ -49,6 +50,39 @@ test('Gemini setup uses raw Live schema, transcription, resumption and documente
     assert.equal(setup.proactivity.proactiveAudio, true);
     assert.ok(!setup.systemInstruction.parts[0].text.includes('The report appears in a card'));
   }
+});
+
+test('Gemini proactive-audio handshake pairs the documented setup schema with v1alpha', () => {
+  // https://ai.google.dev/api/live#BidiGenerateContentSetup documents these raw fields.
+  // https://generativelanguage.googleapis.com/$discovery/rest?version=v1alpha exposes ProactivityConfig.
+  // Google's deployed v1beta rejects proactivity with 1007; v1alpha parses it.
+  const fields = ['model', 'generationConfig', 'systemInstruction', 'tools', 'realtimeInputConfig', 'inputAudioTranscription', 'outputAudioTranscription', 'proactivity', 'sessionResumption', 'contextWindowCompression'].sort();
+  for (const replyMode of ['talk', 'name', 'hold'] as const) {
+    for (const voice of [false, true]) {
+      for (const computerControl of [false, true]) {
+        for (const handle of [undefined, 'resume-token']) {
+          const { url, setup } = geminiConnection({ ...defaults, provider: 'gemini', replyMode, voice, computerControl }, 'https://generativelanguage.googleapis.com', 'test-key', handle);
+          assert.equal(url.protocol, 'wss:');
+          assert.equal(url.pathname, '/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent');
+          assert.equal(url.searchParams.get('key'), 'test-key');
+          assert.deepEqual(Object.keys(setup).sort(), fields);
+          assert.deepEqual(setup.proactivity, { proactiveAudio: true });
+          assert.equal('proactivity' in setup.generationConfig, false);
+          assert.deepEqual(setup.sessionResumption, handle ? { handle } : {});
+          assert.deepEqual(setup.realtimeInputConfig.automaticActivityDetection, replyMode === 'hold' ? { disabled: true } : { disabled: false, prefixPaddingMs: 300, silenceDurationMs: 700 });
+          assert.equal(setup.realtimeInputConfig.activityHandling, voice ? 'START_OF_ACTIVITY_INTERRUPTS' : 'NO_INTERRUPTION');
+        }
+      }
+    }
+  }
+});
+
+test('Gemini depleted prepaid-project credits explain billing instead of the free-tier limit', () => {
+  const expected = 'Your Gemini project has billing on and no credits. Use a key from a free-tier project (no billing) or add credits.';
+  assert.equal(friendlyLiveError('gemini', 'Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billi'), expected);
+  assert.equal(friendlyLiveError('gemini', 'RESOURCE_EXHAUSTED: Your prepayment credits are depleted.'), expected);
+  assert.match(friendlyLiveError('gemini', 'RESOURCE_EXHAUSTED: quota exceeded'), /free limit/);
+  assert.ok(!friendlyLiveError('openai', 'Your prepayment credits are depleted.').includes('Gemini'));
 });
 
 test('A required tool argument must have a declared schema property', () => {

@@ -212,7 +212,7 @@ export class Voice {
       disconnected: (code, reason) => {
         if (!current()) return;
         // 1007 = the provider rejected what we sent (e.g. an unsupported session setting): reconnecting would loop forever.
-        if (code === 1007 || code === 1008 || code === 4001 || code === 4003 || code === 1013 || /resource_exhausted|quota|rate.?limit|api.?key|unauth/i.test(reason)) {
+        if (code === 1007 || code === 1008 || code === 4001 || code === 4003 || code === 1013 || /resource_exhausted|quota|rate.?limit|api.?key|unauth|prepayment credits (?:are )?depleted/i.test(reason)) {
           console.error(`Pip: ${provider.provider} live closed (${code}): ${reason || 'no reason given'}`);
           const text = friendlyLiveError(provider.provider, reason || (code === 1013 ? 'Rate limit' : 'Authentication or session setup refused. Check the API key and model access.'));
           this.sleep(); this.error(text); return;

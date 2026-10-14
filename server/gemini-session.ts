@@ -9,6 +9,13 @@ export function toGeminiFunction(tool: FunctionTool): GeminiFunction {
   for (const required of tool.parameters.required) if (!Object.hasOwn(tool.parameters.properties, required)) throw new Error(`Required parameter ${required} is not declared.`);
   return { name: tool.name, description: tool.description, behavior: 'BLOCKING', parametersJsonSchema: tool.parameters };
 }
+/** Keep the raw Live endpoint and its setup together so API-version compatibility is testable. */
+export function geminiConnection(settings: Settings, base: string, key: string, handle?: string) {
+  // Proactive audio is accepted by v1alpha; the deployed v1beta rejects setup.proactivity with 1007.
+  const url = new URL(base.replace(/^http/, 'ws') + '/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent');
+  url.searchParams.set('key', key);
+  return { url, setup: geminiSetup(settings, handle) };
+}
 export function geminiSetup(settings: Settings, handle?: string) {
   const functions = sessionTools(settings).filter(tool => tool.name !== 'web_research').map(toGeminiFunction);
   // Raw BidiGenerateContent uses generationConfig, not the SDK's flattened responseModalities option.

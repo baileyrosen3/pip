@@ -236,6 +236,12 @@ Add a key for the brain you picked (phone settings, or `pipctl key gemini` / `pi
 </details>
 
 <details>
+<summary><b>Gemini says the project's prepayment credits are depleted</b></summary>
+
+That key belongs to a project with billing enabled, not the free tier. Use a key from a free-tier project with no billing, or add credits in [AI Studio](https://ai.studio/projects). Pip stops the rejected session and shows this guidance instead of reconnecting indefinitely.
+</details>
+
+<details>
 <summary><b>I don't see his pointer on the desktop</b></summary>
 
 With **follow mouse** on, he tucks away below the screen and only his eyes on the phone follow your cursor. He flies out when he points at something. Press `CTRL + ALT + P` to call him over, or turn follow mouse off to keep him parked above the phone. He lives on one monitor: set it in the bar menu (auto = the focused one).
@@ -285,6 +291,8 @@ bin/pipctl  CLI: serve · key · pair · ctl <cmd> · status
 ```
 
 **Develop from a checkout:** `ln -s ~/path/to/pip ~/.config/omarchy/plugins/blr.pip && omarchy plugin enable blr.pip --section right`. The shell doesn't watch files behind a symlink, so run `omarchy restart shell` after QML changes. Server, phone and avatar changes only need a server restart (the plugin restarts it if it exits). Tests: `bun test tests/`. To tune the eyes, open the avatar lab at `docs/lab/` in a browser.
+
+Gemini's raw Live handshake uses `v1alpha` to preserve proactive audio: the deployed `v1beta` endpoint rejects `setup.proactivity` with close code 1007. The [Live API reference](https://ai.google.dev/api/live#BidiGenerateContentSetup) documents the setup fields; the [v1alpha discovery schema](https://generativelanguage.googleapis.com/$discovery/rest?version=v1alpha) includes `proactivity`. Endpoint and setup compatibility are regression-tested together in `tests/gemini-schema.test.ts`.
 
 ## Credits
 
