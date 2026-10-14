@@ -1,0 +1,12 @@
+singleton PipTheme 1.0 PipTheme.qml
+ShellClient 1.0 ShellClient.qml
+PipGlass 1.0 PipGlass.qml
+ResearchCard 1.0 ResearchCard.qml
+PipEffect 1.0 PipEffect.qml
+PipMenu 1.0 PipMenu.qml
+PipButton 1.0 PipButton.qml
+PipToggle 1.0 PipToggle.qml
+PipSegments 1.0 PipSegments.qml
+PipSlider 1.0 PipSlider.qml
+PipIcon 1.0 PipIcon.qml
+PipBubble 1.0 PipBubble.qml

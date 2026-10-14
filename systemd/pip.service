@@ -1,0 +1,17 @@
+[Unit]
+Description=Pip phone companion for Hyprland
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.config/omarchy/plugins/blr.pip
+Environment=PATH=%h/.bun/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.config/omarchy/plugins/blr.pip/bin/pipctl serve
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=330
+UMask=0077
+
+[Install]
+WantedBy=graphical-session.target

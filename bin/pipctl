@@ -1,0 +1,90 @@
+#!/usr/bin/env bun
+import { Configuration, command, isProvider, message, object, port, repoRoot } from '../server/config';
+import type { Provider } from '../server/config';
+import { ensureServe } from '../server/tailscale';
+import { join } from 'node:path';
+const [cmd = 'status', arg] = process.argv.slice(2);
+async function api(path: string, method = 'GET', body?: unknown) {
+  const config = new Configuration();
+  const response = await fetch(`http://127.0.0.1:${port}/api/${path}`, { method, headers: { Authorization: `Bearer ${config.secrets.pairToken}`, 'Content-Type': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+  const data: unknown = await response.json();
+  if (!response.ok) { const error = object(data); throw new Error(typeof error.error === 'string' ? error.error : `HTTP ${response.status}`); }
+  return data;
+}
+async function keyInput(provider: Provider) {
+  if (!process.stdin.isTTY) return (await Bun.stdin.text()).trim();
+  process.stderr.write(`${provider === 'gemini' ? 'Gemini' : 'OpenAI'} API key (hidden): `);
+  process.stdin.setRawMode(true); process.stdin.resume();
+  const { promise, resolve, reject } = Promise.withResolvers<string>();
+  let key = '';
+  const cleanup = () => { process.stdin.setRawMode(false); process.stdin.pause(); process.stdin.off('data', receive); process.stderr.write('\n'); };
+  const receive = (data: Buffer) => {
+    for (const character of data.toString('utf8')) {
+      if (character === '\r' || character === '\n') { cleanup(); resolve(key.trim()); return; }
+      if (character === '\u0003' || character === '\u0004') { cleanup(); reject(new Error('Cancelled.')); return; }
+      if (character === '\u007f' || character === '\b') key = key.slice(0, -1);
+      else if (character >= ' ') key += character;
+    }
+  };
+  process.stdin.on('data', receive);
+  return promise;
+}
+try {
+  switch (cmd) {
+    case 'serve': {
+      const child = Bun.spawn([process.execPath, join(repoRoot, 'server/main.ts')], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit', env: process.env });
+      process.on('SIGINT', () => child.kill('SIGINT')); process.on('SIGTERM', () => child.kill('SIGTERM'));
+      process.exitCode = await child.exited; break;
+    }
+    case 'key': {
+      const config = new Configuration(), provider = arg || config.settings.provider;
+      if (!isProvider(provider)) throw new Error('Usage: pipctl key [openai|gemini|gptlive] (GPT-Live shares the OpenAI key)');
+      const key = await keyInput(provider);
+      if (!key) throw new Error('No key was supplied.'); config.setKey(key, provider);
+      // Notify an already-running server without exposing the key in arguments or output.
+      try {
+        const url = `ws://127.0.0.1:${port}/ws?token=${config.secrets.pairToken}`;
+        const socket = new WebSocket(url);
+        const { promise, resolve } = Promise.withResolvers<void>();
+        let helloCount = 0;
+        const timer = setTimeout(() => { socket.close(); resolve(); }, 1500);
+        socket.onopen = () => { socket.send(JSON.stringify({ t: 'setKey', provider, key })); };
+        socket.onmessage = event => {
+          const packet = object(JSON.parse(String(event.data)));
+          if (packet.t === 'hello' && ++helloCount >= 2) { clearTimeout(timer); socket.close(); resolve(); }
+        };
+        socket.onerror = () => { clearTimeout(timer); resolve(); };
+        await promise;
+      } catch {}
+      console.log(`${provider === 'gemini' ? 'Gemini' : 'OpenAI'} key saved.`); break;
+    }
+    case 'pair': {
+      const config = new Configuration();
+      const identity = await ensureServe();
+      config.update({ tailscaleServe: true });
+      try { await api('settings', 'POST', { tailscaleServe: true }); } catch { /* The saved flag takes effect at the next server boot. */ }
+      const url = `${identity.url}/#token=${config.secrets.pairToken}`;
+      console.log(`On your phone: install Tailscale, sign in as ${identity.login}, open ${identity.url}`);
+      console.log('For another account, open this pairing link or scan the QR:');
+      console.log(url); console.log(await command(['qrencode', '-t', 'ansiutf8', url])); break;
+    }
+    case 'ctl':
+      if (!arg || !['toggle', 'point', 'follow', 'dock', 'hide', 'talk', 'stop'].includes(arg)) throw new Error('Usage: pipctl ctl toggle|point|follow|dock|hide|talk|stop');
+      console.log(JSON.stringify(await api('ctl', 'POST', { cmd: arg }))); break;
+    case 'status': {
+      const info = object(await api('status')), connection = object(info.shell);
+      console.log(`Pip is running at http://127.0.0.1:${port} (${String(info.state)})`);
+      const keys = object(info.keys);
+      console.log(`Brain: ${info.provider === 'gemini' ? 'Gemini · free' : info.provider === 'gptlive' ? 'GPT-Live · paid' : 'OpenAI Realtime · paid'}; selected key: ${info.hasKey ? 'configured' : 'not configured'}`);
+      console.log(`Talk out loud: ${info.voice ? 'on' : 'off'}${info.voice ? ` (${String(info.voiceName)})` : ''}`);
+      console.log(`Keys: OpenAI ${keys.openai ? 'configured' : 'not configured'}; Gemini ${keys.gemini ? 'configured' : 'not configured'}`);
+      console.log(`Shell socket: ${connection.listening ? 'listening' : 'not listening'} (${String(connection.path)})`);
+      console.log(`Overlay: ${connection.overlay ? 'connected' : 'disconnected'}; bar widgets: ${Number(connection.bars) || 0}; agent: ${info.agentReady ? 'ready' : 'not ready'}`);
+      const tail = object(info.tailscale);
+      console.log(`Tailscale: ${tail.running ? 'running' : 'not running'}; login: ${String(tail.login || '(unavailable)')}; URL: ${String(tail.url || '(unavailable)')}`);
+      console.log(`Serve :10000 → http://127.0.0.1:${port}: ${tail.serving ? 'configured' : 'not configured (run pipctl pair)'}`);
+      console.log(JSON.stringify(await api('settings'), null, 2)); break;
+    }
+    default: throw new Error('Usage: pipctl serve|key [openai|gemini|gptlive]|pair|ctl <command>|status');
+  }
+} catch (error) { console.error(`pipctl: ${message(error)}`); process.exitCode = 1; }

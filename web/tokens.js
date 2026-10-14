@@ -1,0 +1,17 @@
+// Mirrored 1:1 from design/tokens.json for the statically served phone app.
+export const tokens = {
+  surface: {
+    dark: {ink:'rgba(16,17,23,0.93)',hairline:'rgba(255,255,255,0.08)',topHighlight:'rgba(255,255,255,0.06)',fg:'#f3f4f8'},
+    light: {ink:'rgba(250,250,252,0.95)',hairline:'rgba(0,0,0,0.06)',topHighlight:'rgba(255,255,255,0.7)',fg:'#14151b'},
+  },
+  text: {primary:.92,secondary:.64,tertiary:.44},
+  shadow: [{y:1,blur:2,color:'rgba(0,0,0,0.25)'},{y:8,blur:24,color:'rgba(0,0,0,0.28)'},{y:24,blur:64,color:'rgba(0,0,0,0.22)'}],
+  radius: {card:22,panel:16,bubble:16,control:12,pill:999},
+  space: {unit:4,xs:8,s:12,m:16,l:20,xl:24},
+  font: {voice:{family:'Fredoka',weight:600,bubble:16,title:24},ui:{family:'IBM Plex Sans',weight:400,labelWeight:500,size:14,lineHeight:1.45},mono:{family:'IBM Plex Mono',size:11.5,opacity:.6}},
+  bubble: {maxWidth:340,wordStaggerMs:40,wordFadeMs:160,enterScale:.92,exitMs:140},
+  card: {width:420},
+  control: {rowHeight:44,toggle:{w:36,h:22},buttonHeight:40,sliderTrack:4,sliderThumb:18,iconStroke:1.75},
+  trail: {historyMs:140,alpha:.14,sparkles:[3,6]},
+  spring: {default:{stiffness:420,damping:.8},quick:{stiffness:600,damping:.9},gentle:{stiffness:220,damping:.75},bubble:{stiffness:520,damping:.72}},
+};
