@@ -168,6 +168,14 @@ Check none of these keys are taken first (`omarchy menu keybindings --print`), t
 
 His home screen is just colour and eyes: no buttons, no badges.
 
+iPhone Safari is the release-tested target, using the [real-phone checklist](docs/phone-checklist.md) before a release. Android Chrome is **community-tested**: run the same checklist and report your results.
+
+```bash
+bash ~/.config/omarchy/plugins/blr.pip/scripts/phone-checklist.sh
+```
+
+The checklist walks through Safari and the home-screen app, records Pass / Fail / Skip and notes, and saves a redacted report you can attach to an issue. It requires a real phone; a dry run does not certify phone behaviour.
+
 | Gesture | What it does |
 |---|---|
 | **Double tap** | Wake Pip up / put him back to sleep |
