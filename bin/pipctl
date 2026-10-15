@@ -81,7 +81,8 @@ try {
       const info = object(await api('status')), connection = object(info.shell);
       console.log(`Pip is running at http://127.0.0.1:${port} (${String(info.state)})`);
       const keys = object(info.keys);
-      console.log(`Brain: ${info.provider === 'gemini' ? 'Gemini · free' : info.provider === 'gptlive' ? 'GPT-Live · paid' : 'OpenAI Realtime · paid'}; selected key: ${info.hasKey ? 'configured' : 'not configured'}`);
+      const brain = { open: 'Open · free (local)', gemini: 'Gemini · free', gptlive: 'GPT-Live · paid', openai: 'OpenAI Realtime · paid' }[String(info.provider)] ?? String(info.provider);
+      console.log(`Brain: ${brain}; selected key: ${info.provider === 'open' ? 'not needed' : info.hasKey ? 'configured' : 'not configured'}`);
       console.log(`Talk out loud: ${info.voice ? 'on' : 'off'}${info.voice ? ` (${String(info.voiceName)})` : ''}`);
       console.log(`Keys: OpenAI ${keys.openai ? 'configured' : 'not configured'}; Gemini ${keys.gemini ? 'configured' : 'not configured'}`);
       console.log(`Shell socket: ${connection.listening ? 'listening' : 'not listening'} (${String(connection.path)})`);
