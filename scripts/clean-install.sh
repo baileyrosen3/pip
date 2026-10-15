@@ -54,6 +54,9 @@ PY
 [[ ${#packages[@]} -gt 0 ]] || { echo 'clean-install: README package list is empty' >&2; exit 1; }
 printf '%s\n' '== Installing README dependencies =='
 pacman -S --needed --noconfirm "${packages[@]}"
+# Not a Pip dependency: used only to load the phone web app in tests/phone-page.test.ts.
+pacman -S --needed --noconfirm chromium
+export PIPCTL_REQUIRE_BROWSER=1
 
 export PIPCTL_PORT=17319
 export PIPCTL_CONFIG_DIR="$work/config"

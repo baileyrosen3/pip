@@ -57,7 +57,9 @@ export class BrowserPage {
     const page = targets.find(target => target.type === 'page');
     if (!page) throw new Error('Browser has no page target.');
     const socket = new WebSocket(page.webSocketDebuggerUrl);
-    await new Promise<void>((resolve, reject) => { socket.onopen = () => resolve(); socket.onerror = () => reject(new Error('DevTools connection failed.')); });
+    const opened = Promise.withResolvers<void>();
+    socket.onopen = () => opened.resolve(); socket.onerror = () => opened.reject(new Error('DevTools connection failed.'));
+    await opened.promise;
     const browser = new BrowserPage(child, profile, socket);
     await browser.send('Runtime.enable');
     await browser.send('Page.enable');
@@ -95,7 +97,9 @@ export class BrowserPage {
   async close() {
     try { this.socket.close(); } catch {}
     this.process.kill('SIGKILL');
-    await new Promise(resolve => { if (this.process.exitCode !== null || this.process.signalCode !== null) resolve(null); else this.process.once('exit', resolve); });
+    const exited = Promise.withResolvers<void>();
+    if (this.process.exitCode !== null || this.process.signalCode !== null) exited.resolve(); else this.process.once('exit', () => exited.resolve());
+    await exited.promise;
     rmSync(this.profile, { recursive: true, force: true });
   }
 }

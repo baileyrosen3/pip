@@ -160,7 +160,7 @@ export const server = Bun.serve<Client>({ hostname: '127.0.0.1', port,
     const url = new URL(request.url);
     try {
       if (url.pathname === '/ws') {
-        if (!tailscale.allowsOrigin(request)) return new Response('Cross-origin WebSocket denied', { status: 403 });
+        if (!tailscale.allowsOrigin(request, server.port ?? port)) return new Response('Cross-origin WebSocket denied', { status: 403 });
         const validToken = config.authorized(url.searchParams.get('token') || ''), autoPaired = !validToken && tailscale.owner(request);
         if (server.upgrade(request, { data: { id: crypto.randomUUID(), name: 'Phone', clientId: '', authorized: validToken || autoPaired, autoPaired } })) return;
         return new Response('WebSocket upgrade required', { status: 426 });

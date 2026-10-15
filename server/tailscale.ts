@@ -73,10 +73,11 @@ export class Tailscale {
   owner(request: Request) {
     return this.status.running && !!this.status.login && request.headers.get('Tailscale-User-Login') === this.status.login;
   }
-  allowsOrigin(request: Request) {
+  /** Same-origin pages only: Pip's own loopback address (the port it actually listens on) or its tailnet URL. */
+  allowsOrigin(request: Request, listeningPort: number) {
     const origin = request.headers.get('Origin');
     if (!origin) return true; // CLI/non-browser clients do not send an Origin.
-    return origin === `http://127.0.0.1:${port}` || origin === `http://localhost:${port}` || (!!this.status.url && origin === this.status.url);
+    return origin === `http://127.0.0.1:${listeningPort}` || origin === `http://localhost:${listeningPort}` || (!!this.status.url && origin === this.status.url);
   }
   stop() { clearInterval(this.timer); }
 }
