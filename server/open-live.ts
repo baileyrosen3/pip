@@ -24,7 +24,7 @@ export class OpenLive implements LiveProvider {
   private vad: OpenVAD;
   constructor(private config: Configuration, private callbacks: LiveCallbacks) {
     this.clients = new OpenClients(config);
-    this.vad = new OpenVAD(() => this.interrupt(), pcm => this.enqueue(pcm, false));
+    this.vad = new OpenVAD(pcm => this.enqueue(pcm, false));
   }
   connect(context: string) {
     this.close(false); this.session = new AbortController(); this.connected = true;
@@ -63,8 +63,8 @@ export class OpenLive implements LiveProvider {
       try {
         const text = await this.clients.transcribe(pcm, session.signal);
         if (session.signal.aborted) return;
+        if (!meaningful(text)) { this.callbacks.emptyCommit(); return; }
         this.callbacks.userWords(id, text, true);
-        if (!text) { this.callbacks.emptyCommit(); return; }
         this.history.push({ role: 'user', content: text });
         const mode = this.config.settings.replyMode;
         if (asked || mode === 'talk' || mode === 'name' && /\bpip\b/i.test(text)) await this.answer();
@@ -149,4 +149,12 @@ export class OpenLive implements LiveProvider {
       }
     }
   }
+}
+
+/** Whisper turns silence, echo and noise into empty text, lone punctuation, or a word repeated over and over. */
+export function meaningful(text: string) {
+  const words = text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+  if (!words.length) return false;
+  if (words.length >= 6 && new Set(words).size / words.length < 0.3) return false;
+  return true;
 }

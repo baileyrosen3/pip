@@ -80,7 +80,8 @@ function applySettings(update){
   if(values.open){const previousOpen=settings.open,nextOpen={...previousOpen};for(const endpoint of ['stt','llm','tts'])nextOpen[endpoint]={...previousOpen[endpoint],...(values.open[endpoint]||{})};settings.open=nextOpen;delete values.open;}
   Object.assign(settings,values);
   if(settings.provider==='gptlive')settings.voice=true;
-  audio.setDuplex(settings.provider==='gptlive');
+  // Full-duplex brains: talking over Pip's voice on the phone stops him (the Open brain no longer stops on any noise).
+  audio.setDuplex(settings.provider==='gptlive'||settings.provider==='open');
   const choices=voices[settings.provider]||voices.gemini;
   if(!choices.includes(settings.voiceName))settings.voiceName=choices[0];
   const voicePicker=$('voiceName');

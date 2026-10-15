@@ -117,6 +117,34 @@ test('Open barge-in clears phone audio and cancels an in-flight streamed reply',
   } finally { await pip.stop(); brain.stop(); }
 });
 
+test('A short noise while Pip is thinking does not throw his answer away', async () => {
+  const brain = mockOpen({ slow: true });
+  const pip = await startServer({ brain, settings: { replyMode: 'talk' } });
+  try {
+    const phone = await pip.phone(); phone.wake(); await phone.waitFor('mic', value => value.on === true);
+    turn(phone); await phone.waitFor('caption', value => value.text === 'Hello');
+    // A cough or a clack: under the minimum speech length, so it never becomes a turn.
+    phone.streamPCM(new Int16Array(2400).fill(3000)); phone.streamPCM(new Int16Array(16800));
+    brain.release();
+    await phone.waitFor('caption', value => value.text === 'Hello there.' && value.done === true);
+    expect(brain.cancelled).toBe(false);
+  } finally { await pip.stop(); brain.stop(); }
+});
+
+test('Empty or garbled transcripts (echo, noise) are not treated as questions', async () => {
+  const brain = mockOpen({ transcript: ['', 'four four four four four four four four four four', 'Pip, hello there.'] });
+  const pip = await startServer({ brain, settings: { replyMode: 'talk' } });
+  try {
+    const phone = await pip.phone(); phone.wake(); await phone.waitFor('mic', value => value.on === true);
+    turn(phone); turn(phone); turn(phone);
+    // Turns are handled in order, so by the time the real question is answered the junk ones were judged.
+    await phone.waitFor('caption', value => value.text === 'Hello there.' && value.done === true);
+    const chats = brain.requests.messages('chat');
+    expect(chats).toHaveLength(1);
+    expect(JSON.stringify(chats[0].messages)).not.toContain('four four');
+  } finally { await pip.stop(); brain.stop(); }
+});
+
 test('Open endpoint failures name the failed service and explain how to start it', async () => {
   const brain = mockOpen({ down: 'llm' });
   const pip = await startServer({ brain, settings: { replyMode: 'talk' } });

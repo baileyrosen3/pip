@@ -1,4 +1,5 @@
-/** Energy VAD over PCM16/24 kHz mono. Decisions use audio time, not packet arrival time. */
+/** Energy VAD over PCM16/24 kHz mono. Decisions use audio time, not packet arrival time.
+ * It only reports finished turns: a cough or click must never cut off an answer Pip is still working on. */
 export class OpenVAD {
   private frame = new Uint8Array(960);
   private used = 0;
@@ -8,7 +9,7 @@ export class OpenVAD {
   private silence = 0;
   private noise = 90;
   private active = false;
-  constructor(private started: () => void, private turn: (pcm: Uint8Array) => void) {}
+  constructor(private turn: (pcm: Uint8Array) => void) {}
   reset() {
     this.used = 0; this.pre = []; this.chunks = []; this.speech = 0; this.silence = 0; this.active = false;
   }
@@ -25,7 +26,7 @@ export class OpenVAD {
       if (!voiced && !this.active) this.noise = this.noise * .97 + Math.min(rms, 450) * .03;
       if (!this.active) {
         if (!voiced) { this.pre.push(frame); if (this.pre.length > 15) this.pre.shift(); continue; }
-        this.active = true; this.chunks = this.pre; this.pre = []; this.started();
+        this.active = true; this.chunks = this.pre; this.pre = [];
       }
       this.chunks.push(frame);
       if (voiced) { this.speech += 20; this.silence = 0; } else this.silence += 20;
