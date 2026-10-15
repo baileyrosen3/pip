@@ -58,7 +58,7 @@ export class OpenClients {
       if (signal.aborted) throw error;
       const service = endpoint === 'llm' ? 'LLM' : endpoint === 'stt' ? 'speech-to-text' : 'text-to-speech';
       const local = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(settings.baseUrl).hostname);
-      const fix = local ? endpoint === 'llm' ? `Start Ollama: OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve; pull the model: ollama pull ${settings.model}.` : 'Start Speaches: docker start pip-open-speaches (see README Open brain setup).' : 'Check its base URL, model and optional API key in Brain → Advanced.';
+      const fix = local ? endpoint === 'llm' ? `Start Ollama: OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 OLLAMA_CONTEXT_LENGTH=16384 OLLAMA_KEEP_ALIVE=-1 ollama serve; pull the model: ollama pull ${settings.model}.` : 'Start Speaches: docker start pip-open-speaches (see README Open brain setup).' : 'Check its base URL, model and optional API key in Brain → Advanced.';
       throw new Error(`Open ${service} service unavailable (${message(error)}). ${fix}`);
     }
   }
@@ -68,6 +68,11 @@ export class OpenClients {
     const json = object(await (await this.request('stt', '/audio/transcriptions', form, signal)).json());
     if (typeof json.text !== 'string') throw new Error('Open speech-to-text returned no transcription text.');
     return json.text.trim();
+  }
+  /** Sends the conversation prefix for a one-token reply: loads the model and fills the server's prompt cache. */
+  async warm(messages: Record<string, unknown>[], tools: Record<string, unknown>[], signal: AbortSignal) {
+    const settings = this.config.settings.open.llm;
+    await (await this.request('llm', '/chat/completions', { model: settings.model, messages: [...messages, { role: 'user', content: 'Ready?' }], tools, max_tokens: 1 }, signal)).arrayBuffer();
   }
   async *chat(messages: Record<string, unknown>[], tools: Record<string, unknown>[], signal: AbortSignal) {
     const settings = this.config.settings.open.llm;

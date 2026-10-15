@@ -26,6 +26,19 @@ test('Open talk turns become transcription, streamed captions and speech on the 
   } finally { await pip.stop(); brain.stop(); }
 });
 
+test('Waking Pip on the Open brain warms the chat model with his instructions and tools before anyone speaks', async () => {
+  const brain = mockOpen({});
+  const pip = await startServer({ brain, settings: { replyMode: 'talk' }, keys: { openai: '', gemini: '' } });
+  try {
+    const phone = await pip.phone(); phone.wake(); await phone.waitFor('mic', value => value.on === true);
+    const warm = await brain.requests.waitFor('warm');
+    expect(warm.max_tokens).toBe(1);
+    expect(JSON.stringify(warm.tools)).toContain('look_at_screen');
+    expect(JSON.stringify(warm.messages)).toContain('You are Pip');
+    expect(brain.requests.messages('chat')).toEqual([]);
+  } finally { await pip.stop(); brain.stop(); }
+});
+
 test('Open tool loop gives the model screen text and an image before answering', async () => {
   const brain = mockOpen({ screen: true });
   const pip = await startServer({ brain, desktop: 'fake', settings: { replyMode: 'talk' } });

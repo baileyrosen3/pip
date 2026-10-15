@@ -16,13 +16,13 @@ let clientId=storage.get('clientId');
 if(!clientId){clientId=crypto.randomUUID();storage.set('clientId',clientId);}
 let ws,connected=false,host='',state='asleep',retries=0,reconnectTimer,wakeLock,noticeTimer;
 let detailId,detailData,sessions=[],captionTimer,holding=false,pointerId=null,holdTimer,pokeTimer,lastTap=0,lastPoint=null;
-const settings={provider:'gemini',voice:true,voiceName:'Puck',color:'theme',pointer:'arrow',eyeStyle:'flat',eyeSize:1,cursorSize:44,showCursor:true,followMouse:true,computerControl:false,notes:false,autoSleep:5,monitor:'auto',personality:'',volume:1,replyMode:'talk',open:{stt:{baseUrl:'http://127.0.0.1:8000/v1',model:'Systran/faster-whisper-small'},llm:{baseUrl:'http://127.0.0.1:11434/v1',model:'qwen3-vl:8b-instruct'},tts:{baseUrl:'http://127.0.0.1:8000/v1',model:'speaches-ai/piper-en_GB-alan-medium',voice:'alan'}}};
+const settings={provider:'gemini',voice:true,voiceName:'Puck',color:'theme',pointer:'arrow',eyeStyle:'flat',eyeSize:1,cursorSize:44,showCursor:true,followMouse:true,computerControl:false,notes:false,autoSleep:5,monitor:'auto',personality:'',volume:1,replyMode:'talk',open:{stt:{baseUrl:'http://127.0.0.1:8000/v1',model:'Systran/faster-whisper-base.en'},llm:{baseUrl:'http://127.0.0.1:11434/v1',model:'qwen3-vl:8b-instruct'},tts:{baseUrl:'http://127.0.0.1:8000/v1',model:'speaches-ai/piper-en_GB-alan-medium',voice:'alan'}}};
 const keys={openai:null,gemini:null,open:{stt:null,llm:null,tts:null}};
 const providerNames={open:'Open · free',openai:'OpenAI Realtime',gemini:'Gemini',gptlive:'GPT-Live'};
 const voices={open:['alan'],openai:['marin','cedar','alloy','ash','ballad','coral','echo','sage','shimmer','verse'],gemini:['Puck','Kore','Charon','Fenrir','Aoede','Leda','Orus','Zephyr'],gptlive:['vesper','marin','ripple','quartz','willow','stone','gleam','meridian','beacon','delta','cinder','bossa','tempo']};
 const keyProvider=()=>settings.provider==='gemini'?'gemini':'openai';
 const openPresets={
-  local:{stt:{baseUrl:'http://127.0.0.1:8000/v1',model:'Systran/faster-whisper-small'},llm:{baseUrl:'http://127.0.0.1:11434/v1',model:'qwen3-vl:8b-instruct'},tts:{baseUrl:'http://127.0.0.1:8000/v1',model:'speaches-ai/piper-en_GB-alan-medium',voice:'alan'}},
+  local:{stt:{baseUrl:'http://127.0.0.1:8000/v1',model:'Systran/faster-whisper-base.en'},llm:{baseUrl:'http://127.0.0.1:11434/v1',model:'qwen3-vl:8b-instruct'},tts:{baseUrl:'http://127.0.0.1:8000/v1',model:'speaches-ai/piper-en_GB-alan-medium',voice:'alan'}},
   groq:{stt:{baseUrl:'https://api.groq.com/openai/v1',model:'whisper-large-v3-turbo'},llm:{baseUrl:'https://api.groq.com/openai/v1',model:'qwen/qwen3.8-27b'}},
   openrouter:{llm:{baseUrl:'https://openrouter.ai/api/v1',model:'qwen/qwen3-vl-8b-instruct'}}
 };

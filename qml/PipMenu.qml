@@ -46,13 +46,13 @@ PopupWindow {
     implicitHeight: Math.min(780, contents.implicitHeight + padding * 2, screenInfo ? screenInfo.height - (bar ? bar.barSize : 0) - edge * 2 : 780)
     function setting(key, value) { var message = {ev:"settings"}; message[key] = value; client.send(message) }
     function openField(endpoint, key, value) {
-        var defaults={stt:{baseUrl:"http://127.0.0.1:8000/v1",model:"Systran/faster-whisper-small"},llm:{baseUrl:"http://127.0.0.1:11434/v1",model:"qwen3-vl:8b-instruct"},tts:{baseUrl:"http://127.0.0.1:8000/v1",model:"speaches-ai/piper-en_GB-alan-medium",voice:"alan"}}
+        var defaults={stt:{baseUrl:"http://127.0.0.1:8000/v1",model:"Systran/faster-whisper-base.en"},llm:{baseUrl:"http://127.0.0.1:11434/v1",model:"qwen3-vl:8b-instruct"},tts:{baseUrl:"http://127.0.0.1:8000/v1",model:"speaches-ai/piper-en_GB-alan-medium",voice:"alan"}}
         var current=client.settings.open || {},update={stt:Object.assign({},defaults.stt,current.stt || {}),llm:Object.assign({},defaults.llm,current.llm || {}),tts:Object.assign({},defaults.tts,current.tts || {})}
         update[endpoint][key]=value
         setting("open",update)
     }
     function openPreset(name) {
-        var local={stt:{baseUrl:"http://127.0.0.1:8000/v1",model:"Systran/faster-whisper-small"},llm:{baseUrl:"http://127.0.0.1:11434/v1",model:"qwen3-vl:8b-instruct"},tts:{baseUrl:"http://127.0.0.1:8000/v1",model:"speaches-ai/piper-en_GB-alan-medium",voice:"alan"}}
+        var local={stt:{baseUrl:"http://127.0.0.1:8000/v1",model:"Systran/faster-whisper-base.en"},llm:{baseUrl:"http://127.0.0.1:11434/v1",model:"qwen3-vl:8b-instruct"},tts:{baseUrl:"http://127.0.0.1:8000/v1",model:"speaches-ai/piper-en_GB-alan-medium",voice:"alan"}}
         var groq={stt:{baseUrl:"https://api.groq.com/openai/v1",model:"whisper-large-v3-turbo"},llm:{baseUrl:"https://api.groq.com/openai/v1",model:"qwen/qwen3.8-27b"}}
         var openrouter={llm:{baseUrl:"https://openrouter.ai/api/v1",model:"qwen/qwen3-vl-8b-instruct"}}
         var selected=name==="local" ? local : name==="groq" ? groq : openrouter
@@ -215,7 +215,7 @@ PopupWindow {
                         }
                     }
                     Repeater {
-                        model:[{endpoint:"stt",name:"Speech to text (STT)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:8000/v1"},{key:"model",label:"Model",defaultValue:"Systran/faster-whisper-small"}]},{endpoint:"llm",name:"Language model (LLM)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:11434/v1"},{key:"model",label:"Model",defaultValue:"qwen3-vl:8b-instruct"}]},{endpoint:"tts",name:"Text to speech (TTS)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:8000/v1"},{key:"model",label:"Model",defaultValue:"speaches-ai/piper-en_GB-alan-medium"},{key:"voice",label:"Voice",defaultValue:"alan"}]}]
+                        model:[{endpoint:"stt",name:"Speech to text (STT)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:8000/v1"},{key:"model",label:"Model",defaultValue:"Systran/faster-whisper-base.en"}]},{endpoint:"llm",name:"Language model (LLM)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:11434/v1"},{key:"model",label:"Model",defaultValue:"qwen3-vl:8b-instruct"}]},{endpoint:"tts",name:"Text to speech (TTS)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:8000/v1"},{key:"model",label:"Model",defaultValue:"speaches-ai/piper-en_GB-alan-medium"},{key:"voice",label:"Voice",defaultValue:"alan"}]}]
                         delegate:Column {
                             id:openEndpoint
                             required property var modelData

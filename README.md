@@ -158,7 +158,7 @@ Install Ollama's Vulkan build on Omarchy, pull the vision model, and start it wi
 
 ```bash
 omarchy pkg add ollama-vulkan
-OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
+OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 OLLAMA_CONTEXT_LENGTH=16384 OLLAMA_KEEP_ALIVE=-1 ollama serve
 # In another terminal:
 ollama pull qwen3-vl:8b-instruct
 ```
@@ -188,16 +188,18 @@ This binds only to loopback, not your LAN. Downloads and first model loads need 
 
 | Endpoint | Base URL | Model / voice |
 |---|---|---|
-| Speech-to-text | `http://127.0.0.1:8000/v1` | `Systran/faster-whisper-small` |
+| Speech-to-text | `http://127.0.0.1:8000/v1` | `Systran/faster-whisper-base.en` |
 | Chat, tools and screen images | `http://127.0.0.1:11434/v1` | `qwen3-vl:8b-instruct` |
 | Text-to-speech | `http://127.0.0.1:8000/v1` | `speaches-ai/piper-en_GB-alan-medium`, voice `alan` |
 
 Download the speech models once the container is ready:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/models/Systran/faster-whisper-small
+curl -X POST http://127.0.0.1:8000/v1/models/Systran/faster-whisper-base.en
 curl -X POST http://127.0.0.1:8000/v1/models/speaches-ai/piper-en_GB-alan-medium
 ```
+
+Measured end to end on a Ryzen AI 9 HX 370 / Radeon 890M with the defaults (Whisper base.en, Qwen3-VL 8B instruct, Piper): **0.6–2.4 s** from when you stop talking to hearing Pip, for plain questions. Pip loads the model and its instructions when you wake him, so the first answer isn't slow; Ollama's `OLLAMA_KEEP_ALIVE=-1` keeps the model loaded between sessions. Questions about the screen take about 12 s on this GPU.
 
 On the measured Ryzen AI 9 HX 370 / Radeon 890M / 91 GB machine, Speaches' warm STT took about **2.31 s** for a three-second clip and **2.65 s** for a ten-second clip. Piper's median first PCM was **0.374 s** across five warm runs (0.467, 0.467, 0.374, 0.354, 0.327 s), versus **3.276 s** for Kokoro `bm_george` on a fifteen-word reply. Piper is the responsive British-male default; you can choose Kokoro (`speaches-ai/Kokoro-82M-v1.0-ONNX`) in Advanced instead. These are component timings, not an end-to-end reply guarantee; turn detection, chat and cold loads add latency.
 

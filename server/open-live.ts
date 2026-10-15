@@ -31,7 +31,13 @@ export class OpenLive implements LiveProvider {
     this.signature = JSON.stringify([this.config.settings, this.config.secrets.open]);
     this.history = [{ role: 'system', content: sessionInstructions(this.config.settings, 'open') + '\n\nThe app transcribes each turn and only requests a response for an addressed turn. Answer this request now; never pretend to hear live audio.' + (!this.config.secrets.openaiKey ? '\nWeb research is not configured. Do not claim to search the web; say briefly when current facts cannot be verified.' : '') }];
     if (context) this.history.push({ role: 'user', content: 'Earlier session context (do not answer):\n' + context });
+    // Load the model and cache Pip's long instructions + tools while the user starts talking, so the first
+    // answer doesn't pay for a cold model load and ~2,500 tokens of prompt (about 10 s on an integrated GPU).
+    void this.clients.warm(this.history, this.tools(), this.session.signal).catch(() => {});
     queueMicrotask(() => { if (this.connected) this.callbacks.ready(false); });
+  }
+  private tools() {
+    return sessionTools(this.config.settings).filter(tool => tool.name !== 'web_research' || !!this.config.secrets.openaiKey).map(({ type, ...fn }) => ({ type, function: fn }));
   }
   close(_reset: boolean) {
     this.connected = false; this.session.abort(); this.reply?.abort(); this.toolsDone?.(); this.toolsDone = undefined;
@@ -110,8 +116,7 @@ export class OpenLive implements LiveProvider {
       while (!signal.aborted) {
         let text = '';
         const calls = new Map<number, ToolCall>();
-        const tools = sessionTools(this.config.settings).filter(tool => tool.name !== 'web_research' || !!this.config.secrets.openaiKey).map(({ type, ...fn }) => ({ type, function: fn }));
-        for await (const delta of this.clients.chat(this.history, tools, signal)) {
+        for await (const delta of this.clients.chat(this.history, this.tools(), signal)) {
           if (signal.aborted) return;
           if (typeof delta.content === 'string') {
             text += delta.content; sentence += delta.content; this.callbacks.text(delta.content);

@@ -30,7 +30,10 @@ export function mockOpen(options: { transcript?: string | string[]; screen?: boo
       return new Response(new Int16Array(2400).fill(800), { headers: { 'Content-Type': 'audio/pcm' } });
     }
     if (path.endsWith('/chat/completions')) {
-      const body = packet(await request.json()); requests.push({ type: 'chat', ...body });
+      const body = packet(await request.json());
+      // Pip warms the model on wake with a non-streamed one-token request; scenarios assert on real replies.
+      if (body.stream !== true) { requests.push({ type: 'warm', ...body }); return Response.json({ choices: [{ message: { role: 'assistant', content: '' } }] }); }
+      requests.push({ type: 'chat', ...body });
       if (options.down === 'llm') return new Response('unavailable', { status: 503 });
       const tool = options.screen && chats++ === 0;
       const stream = new ReadableStream<Uint8Array>({ async start(controller) {

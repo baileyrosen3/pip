@@ -13,7 +13,7 @@ export type Provider = 'open' | 'openai' | 'gemini' | 'gptlive';
 export type OpenEndpoint = 'stt' | 'llm' | 'tts';
 export type OpenSettings = { stt: { baseUrl: string; model: string }; llm: { baseUrl: string; model: string }; tts: { baseUrl: string; model: string; voice: string } };
 export const openDefaults: OpenSettings = {
-  stt: { baseUrl: 'http://127.0.0.1:8000/v1', model: 'Systran/faster-whisper-small' },
+  stt: { baseUrl: 'http://127.0.0.1:8000/v1', model: 'Systran/faster-whisper-base.en' },
   llm: { baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3-vl:8b-instruct' },
   tts: { baseUrl: 'http://127.0.0.1:8000/v1', model: 'speaches-ai/piper-en_GB-alan-medium', voice: 'alan' },
 };
