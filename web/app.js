@@ -193,9 +193,8 @@ function keyStatus(packet={}){
     $(`${provider}-key-status`).textContent=saved===null?'Checking saved key…':saved?'Key saved on your computer.':`No ${name} key saved.`;
   }
   for(const endpoint of ['stt','llm','tts']){
-    const saved=keys.open[endpoint],field=$(`open-${endpoint}-key-form`);
+    const saved=keys.open[endpoint];
     $(`open-${endpoint}-key-status`).textContent=saved===null?'Checking saved key…':saved?'Optional key saved on your computer.':'No key saved (optional).';
-    field.classList.remove('needed');
   }
   const saved=keys[keyProvider()],name=providerNames[settings.provider],keyName=keyProvider()==='openai'?'OpenAI':'Gemini';
   $('brain-status').textContent=settings.provider==='open'?'Ready to use local or remote OpenAI-compatible services; API keys are optional.':saved===null?'Connect to your computer to check saved keys.':saved?`${name} is ready with your ${keyName} key.`:`Add your ${keyName} key below to use ${name}.`;
