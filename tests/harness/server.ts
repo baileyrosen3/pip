@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync }
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import type { MockBrain } from './brain';
+import type { Provider } from '../../server/config';
 import { Phone } from './phone';
 import { installDesktop } from './desktop';
 
@@ -13,7 +14,7 @@ export interface ChecksFixture {
   executable?: string[];
 }
 export interface ServerOptions {
-  brain: Pick<MockBrain, 'kind' | 'baseURL'>;
+  brain: { kind: Provider; baseURL: string };
   /** Real-API smokes supply env keys explicitly; only temp secrets are written. */
   keys?: { openai?: string; gemini?: string };
   desktop?: 'fake';
@@ -62,6 +63,7 @@ export async function startServer(options: ServerOptions): Promise<PipServer> {
   if (options.settings !== null) {
     writeFileSync(join(configDir, 'config.json'), JSON.stringify({
       provider: options.brain.kind, replyMode: 'hold', computerControl: false, notes: false,
+      ...(options.brain.kind === 'open' ? { open: { stt: { baseUrl: options.brain.baseURL, model: 'fixture' }, llm: { baseUrl: options.brain.baseURL, model: 'fixture' }, tts: { baseUrl: options.brain.baseURL, model: 'fixture', voice: 'af_heart' } } } : {}),
       tailscaleServe: false, ...options.settings,
     }), { mode: 0o600 });
   }

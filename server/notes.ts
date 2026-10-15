@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { atomicJSON, command, Configuration, geminiBase, isProvider, message, object, openaiBase } from './config';
 import type { Provider } from './config';
 import { friendlyLiveError } from './live-provider';
+import { OpenClients } from './open-clients';
 export type EntryKind = 'heard' | 'asked' | 'reply' | 'report' | 'transcript';
 export type Entry = { id: string; kind: EntryKind; text: string; time: number; itemID?: string; speaker?: string };
 export type PendingChunk = { index: number; started: number };
@@ -160,9 +161,18 @@ export class Notes {
         if (!this.config.settings.notes) return;
         const provider = session.provider ?? 'openai';
         const key = this.config.key(provider);
-        if (!key) throw new Error(`No ${provider === 'gemini' ? 'Gemini' : 'OpenAI'} key; recording saved for transcription after a restart with a key.`);
+        if (!key && provider !== 'open') throw new Error(`No ${provider === 'gemini' ? 'Gemini' : 'OpenAI'} key; recording saved for transcription after a restart with a key.`);
         let segments: { speaker: string; start: number; end: number; text: string }[] = [];
-        if (provider === 'gemini') {
+        if (provider === 'open') {
+          const body = new FormData(); body.set('model', this.config.settings.open.stt.model); body.set('response_format', 'json');
+          body.set('file', new File([await Bun.file(audio).arrayBuffer()], 'chunk.m4a', { type: 'audio/mp4' }));
+          if (!this.config.settings.notes) return;
+          const response = await new OpenClients(this.config).request('stt', '/audio/transcriptions', body, AbortSignal.timeout(300_000));
+          const json = object(await response.json());
+          if (typeof json.text !== 'string') throw new Error('Open speech-to-text returned no recording transcript.');
+          // Standard compatible STT has no speaker identity contract; never invent labels.
+          if (json.text.trim()) segments = [{ speaker: '?', start: 0, end: 0, text: json.text.trim() }];
+        } else if (provider === 'gemini') {
           const json = await this.postGemini(audio, key);
           if (!json) return;
           if (!Array.isArray(json.segments)) throw new Error('Gemini transcription returned no segments.');
@@ -198,8 +208,8 @@ export class Notes {
       } catch (error) {
         const detail = message(error); console.error(`Pip transcription: ${detail}`);
         const provider = session.provider ?? 'openai';
-        const reason = /quota|rate.?limit|resource_exhausted|api.?key|unauth|permission|transcription 40[13]/i.test(detail) ? friendlyLiveError(provider, detail) : `${provider === 'gemini' ? 'Gemini' : 'OpenAI'} could not finish that recording's transcription.`;
-        this.onError(`${reason} Your recording is saved for transcription after a restart with a working key.`);
+        const reason = provider === 'open' ? detail : /quota|rate.?limit|resource_exhausted|api.?key|unauth|permission|transcription 40[13]/i.test(detail) ? friendlyLiveError(provider, detail) : `${provider === 'gemini' ? 'Gemini' : 'OpenAI'} could not finish that recording's transcription.`;
+        this.onError(`${reason} Your recording is saved for transcription after a restart with a working ${provider === 'open' ? 'speech-to-text service' : 'key'}.`);
       }
       finally { this.jobs.delete(id); }
     })();

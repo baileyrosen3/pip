@@ -19,7 +19,7 @@ const theme = new OmarchyTheme();
 await notes.init();
 const tools = new Tools(agent, shell, config), voice = new Voice(config, notes, tools);
 const tailscale = new Tailscale(config);
-const checks = new Checks(await checkEnvironment());
+const checks = new Checks(await checkEnvironment(), config);
 const clients = new Set<ServerWebSocket<Client>>();
 let micOwner: ServerWebSocket<Client> | undefined;
 let lastAudioItem: { id: string; index: number } | undefined;
@@ -41,11 +41,14 @@ function settingsChanged() {
   agent.send({ op: 'settings', monitor: config.settings.monitor });
   shell.send({ op: 'settings', ...config.settings, theme: theme.colors, hasKey: config.hasKey, keys: config.keys });
   broadcast({ t: 'settings', ...config.settings, theme: theme.colors, hasKey: config.hasKey, keys: config.keys }); voice.configure(); statusChanged();
+  void checks.refresh();
 }
-function saveKey(provider: unknown, key: unknown) {
-  if (!isProvider(provider)) throw new Error('Choose OpenAI Realtime, GPT-Live or Gemini for this key.');
+function saveKey(provider: unknown, key: unknown, endpoint?: unknown) {
+  if (!isProvider(provider)) throw new Error('Choose Open, OpenAI Realtime, GPT-Live or Gemini for this key.');
   if (typeof key !== 'string') throw new Error('The API key must be text.');
-  config.setKey(key, provider); voice.configure(); broadcast(hello()); statusChanged();
+  if (provider === 'open' && endpoint !== 'stt' && endpoint !== 'llm' && endpoint !== 'tts') throw new Error('Choose STT, LLM or TTS for this key.');
+  config.setKey(key, provider, endpoint === 'stt' || endpoint === 'llm' || endpoint === 'tts' ? endpoint : undefined); voice.configure(); broadcast(hello()); statusChanged();
+  if (provider === 'open') void checks.refresh();
 }
 theme.onChange = () => settingsChanged();
 function owner(preferred?: ServerWebSocket<Client>) {
@@ -84,7 +87,7 @@ shell.onEvent = (event, role) => {
   } else {
     let operation: Promise<unknown>;
     if (event.ev === 'ctl' && typeof event.cmd === 'string') operation = control(event.cmd);
-    else if (event.ev === 'setKey') { try { saveKey(event.provider, event.key); } catch (error) { shell.send({ op: 'bubble', text: message(error), life: 4 }); } return; }
+    else if (event.ev === 'setKey') { try { saveKey(event.provider, event.key, event.endpoint); } catch (error) { shell.send({ op: 'bubble', text: message(error), life: 4 }); } return; }
     else if (event.ev === 'settings') { try { config.update(event); settingsChanged(); } catch (error) { console.error(`Pip bar settings: ${message(error)}`); shell.send({ op: 'bubble', text: message(error), life: 4 }); } return; }
     else if (event.ev === 'openNotes') operation = command(['xdg-open', notes.root]);
     else if (event.ev === 'pair') operation = tailscale.serve();
@@ -134,7 +137,7 @@ async function packet(client: ServerWebSocket<Client>, data: Record<string, unkn
     case 'bargeIn': if (client === micOwner) voice.bargeIn(); break;
     case 'hear': if (client === micOwner) voice.hear(); break;
     case 'settings': config.update(data); settingsChanged(); break;
-    case 'setKey': saveKey(data.provider, data.key); break;
+    case 'setKey': saveKey(data.provider, data.key, data.endpoint); break;
     default: throw new Error('Unknown phone message.');
   }
 }

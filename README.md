@@ -143,11 +143,63 @@ Open settings on the phone (two-finger tap) and choose which AI runs Pip:
 
 | Brain | Cost | Get a key | Notes |
 |---|---|---|---|
+| **Open · free** | Free on your computer | No key needed locally | Pip detects turns, then uses separate OpenAI-compatible speech-to-text, chat and speech endpoints. Local defaults and cloud presets are below. |
 | **Gemini Live** (default) | Free tier | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Uses `gemini-3.8-live` for talking and `gemini-3.8-flash` for meeting notes. On the [free tier](https://ai.google.dev/gemini-api/docs/pricing) Google may use your data and there are rate limits. Make the key in a project without billing turned on. |
 | **OpenAI Realtime** | Paid | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | Uses `gpt-realtime-2.1` for talking, `gpt-4o-transcribe-diarize` for meeting notes, and web search for research cards. [Audio pricing](https://developers.openai.com/api/docs/models/gpt-realtime-2.1) is $32 per million input tokens and $64 per million output tokens. |
 | **GPT-Live** | [$0.05/minute](https://developers.openai.com/api/docs/models/gpt-live-1) plus tool usage | Same OpenAI key | `gpt-live-1` handles the conversation. A second OpenAI model handles screenshots and tools, and that's billed separately, as are meeting notes. |
 
 Paste the key in phone settings or the bar menu. It's saved only on your computer (`~/.config/pip/secrets.json`, readable only by you). From a terminal you can also run `pipctl key gemini` or `pipctl key openai`. OpenAI Realtime and GPT-Live use the same key.
+
+#### Open brain: local by default
+
+Choose **Open · free** on the phone or in the bar menu. No cloud account or key is needed. Pip itself turns the phone's PCM mic stream into turns, including about 660 ms of silence before sending a turn. **Say “Pip”** transcribes every turn but only answers addressed turns; **Hold** sends your held question on release. Background transcripts are saved only when meeting notes are on. The local transcription endpoint does not promise speaker diarization; meeting notes use unknown speaker labels rather than guessing.
+
+Install Ollama's Vulkan build on Omarchy, pull the vision model, and start it with integrated GPU support:
+
+```bash
+omarchy pkg add ollama-vulkan
+OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 ollama serve
+# In another terminal:
+ollama pull qwen3-vl:8b
+```
+
+The integrated-GPU flag matters on AMD Radeon 890M: Vulkan support alone may still select the CPU. Ollama listens at `http://127.0.0.1:11434/v1`. Pip disables hidden reasoning for local Qwen models to keep spoken answers short and prompt.
+
+Run [Speaches](https://github.com/speaches-ai/speaches) for speech-to-text and speech on the CPU (Docker must already be installed and available to your user):
+
+```bash
+docker run --detach --name pip-open-speaches \
+  --publish 127.0.0.1:8000:8000 \
+  --volume pip-open-hf-cache:/home/ubuntu/.cache/huggingface/hub \
+  --env WHISPER__CPU_THREADS=8 --env WHISPER__COMPUTE_TYPE=int8 \
+  ghcr.io/speaches-ai/speaches:latest-cpu
+```
+
+This binds only to loopback, not your LAN. Downloads and first model loads need internet and take longer than warm replies. After a reboot, use `docker start pip-open-speaches` and start Ollama again. Pip's first-run checklist checks the endpoints and the installed chat model; its fix commands are suggestions, never executed automatically.
+
+| Endpoint | Base URL | Model / voice |
+|---|---|---|
+| Speech-to-text | `http://127.0.0.1:8000/v1` | `Systran/faster-whisper-small` |
+| Chat, tools and screen images | `http://127.0.0.1:11434/v1` | `qwen3-vl:8b` |
+| Text-to-speech | `http://127.0.0.1:8000/v1` | `speaches-ai/piper-en_GB-alan-medium`, voice `alan` |
+
+Download the speech models once the container is ready:
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/models/Systran/faster-whisper-small
+curl -X POST http://127.0.0.1:8000/v1/models/speaches-ai/piper-en_GB-alan-medium
+```
+
+On the measured Ryzen AI 9 HX 370 / Radeon 890M / 91 GB machine, Speaches' warm STT took about **2.31 s** for a three-second clip and **2.65 s** for a ten-second clip. Piper's median first PCM was **0.374 s** across five warm runs (0.467, 0.467, 0.374, 0.354, 0.327 s), versus **3.276 s** for Kokoro `bm_george` on a fifteen-word reply. Piper is the responsive British-male default; you can choose Kokoro (`speaches-ai/Kokoro-82M-v1.0-ONNX`) in Advanced instead. These are component timings, not an end-to-end reply guarantee; turn detection, chat and cold loads add latency.
+
+**Brain → Advanced** edits each endpoint independently: base URL (including `/v1`), model, optional key, and the speech voice. Keys live only in `secrets.json`, with a separate optional key per endpoint; they are never sent back to the phone. **Local** restores these defaults. Any compatible endpoint may be used; chat needs streaming and function calling, and answering screen questions also needs image inputs. Speech responses may be PCM16/24 kHz or WAV; Pip converts WAV rate and channels for the phone. Turning **Talk out loud** off skips speech synthesis and keeps captions plus a chirp. Speaking over a reply cancels its chat and speech requests and clears queued phone audio.
+
+**Groq:** the preset sets speech-to-text and chat to `https://api.groq.com/openai/v1`, using `whisper-large-v3-turbo` and `qwen/qwen3.8-27b`; paste your [Groq key](https://console.groq.com/keys) separately for both endpoints. Text-to-speech stays local. Free tiers have quotas and model availability changes; choose another supported model in Advanced if needed. A text-only model cannot inspect screenshot images.
+
+**OpenRouter:** the preset changes only chat to `https://openrouter.ai/api/v1`; add your [OpenRouter key](https://openrouter.ai/settings/keys) and pick an available image-and-tools-capable model. The preset model is editable; select a currently available `:free` model to use a free tier (the preset model itself is not a promise of free pricing). Speech-to-text and speech remain local. Cloud endpoints receive the audio, conversation or screenshots sent to that endpoint, under their own privacy and quota policies.
+
+Local models do not have web access. Open only offers Pip's research-card tool when a separate OpenAI key is saved; that tool uses the existing, separately billed OpenAI research service. Without that key, Open never offers a tool that would fail halfway through an answer asking for one.
+
 
 ### 5. Keyboard shortcuts (optional)
 
@@ -209,7 +261,7 @@ The **bar menu** (click his eyes in the bar) has everything else: wake, point, f
 
 | Setting | Options |
 |---|---|
-| Brain | Gemini Live (free), OpenAI Realtime, GPT-Live |
+| Brain | Open (free local), Gemini Live (free), OpenAI Realtime, GPT-Live |
 | Talk out loud | On by default, off for text and a chirp, always on for GPT-Live |
 | Voice | Depends on the brain |
 | Pip answers | When I talk, when I say "Pip", when I hold |
@@ -300,9 +352,12 @@ flowchart LR
     S <-->|stdin/stdout| H
   end
   S <-->|"WebSocket"| A["Gemini Live, OpenAI Realtime or GPT-Live"]
+  S <-->|"HTTP · transcription / streamed chat / speech"| L["Open · local services or compatible endpoints"]
 ```
 
 The eyes are drawn by the same JavaScript (`avatar/*.mjs`) on the phone and in the desktop overlay and bar, so they look the same everywhere.
+
+The Open brain uses phone-side audio transport but server-side energy/noise-floor turn detection with pre-roll and minimum speech length. Each turn becomes a WAV transcription upload; the chat stream reuses Pip's instructions and function tools, includes screenshot results as image messages, and feeds complete sentences to speech synthesis. Other brains keep their native live connections.
 
 ```
 manifest.json · Service.qml · Overlay.qml · BarWidget.qml · qml/   Omarchy plugin (Quickshell)

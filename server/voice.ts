@@ -4,6 +4,7 @@ import { Tools } from './tools';
 import { OpenAILive } from './openai-live';
 import { GeminiLive } from './gemini-live';
 import { GPTLive } from './gptlive-live';
+import { OpenLive } from './open-live';
 import { friendlyLiveError } from './live-provider';
 import type { AudioItem, LiveCallbacks, LiveProvider, PlaybackItem, ToolCall, ToolOutput } from './live-provider';
 export type VoiceState = 'asleep' | 'waking' | 'listening' | 'asking' | 'thinking' | 'speaking';
@@ -141,7 +142,7 @@ export class Voice {
     this.playingAudio = on; this.tools.playback(on); this.live?.playback?.(on, items);
     if (on) this.setState('speaking'); else this.finishIfQuiet();
   }
-  bargeIn() { if (this.wantAwake && this.live?.provider === 'gptlive') this.live.interrupt?.(); }
+  bargeIn() { if (this.wantAwake && (this.live?.provider === 'gptlive' || this.live?.provider === 'open')) this.live.interrupt?.(); }
   private voiceEnabled() { return this.config.settings.voice || this.config.settings.provider === 'gptlive'; }
   private stopAudio() {
     this.playingAudio = false; this.tools.playback(false); this.audioStop?.();
@@ -258,7 +259,7 @@ export class Voice {
       },
       reconnect: () => { if (current()) this.reconnect(true); },
     };
-    provider = this.config.settings.provider === 'gemini' ? new GeminiLive(this.config, callbacks) : this.config.settings.provider === 'gptlive' ? new GPTLive(this.config, callbacks) : new OpenAILive(this.config, callbacks);
+    provider = this.config.settings.provider === 'open' ? new OpenLive(this.config, callbacks) : this.config.settings.provider === 'gemini' ? new GeminiLive(this.config, callbacks) : this.config.settings.provider === 'gptlive' ? new GPTLive(this.config, callbacks) : new OpenAILive(this.config, callbacks);
     return provider;
   }
   private reconnect(immediate: boolean) {

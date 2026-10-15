@@ -16,11 +16,16 @@ let clientId=storage.get('clientId');
 if(!clientId){clientId=crypto.randomUUID();storage.set('clientId',clientId);}
 let ws,connected=false,host='',state='asleep',retries=0,reconnectTimer,wakeLock,noticeTimer;
 let detailId,detailData,sessions=[],captionTimer,holding=false,pointerId=null,holdTimer,pokeTimer,lastTap=0,lastPoint=null;
-const settings={provider:'gemini',voice:true,voiceName:'Puck',color:'theme',pointer:'arrow',eyeStyle:'flat',eyeSize:1,cursorSize:44,showCursor:true,followMouse:true,computerControl:false,notes:false,autoSleep:5,monitor:'auto',personality:'',volume:1,replyMode:'talk'};
-const keys={openai:null,gemini:null};
-const providerNames={openai:'OpenAI Realtime',gemini:'Gemini',gptlive:'GPT-Live'};
-const voices={openai:['marin','cedar','alloy','ash','ballad','coral','echo','sage','shimmer','verse'],gemini:['Puck','Kore','Charon','Fenrir','Aoede','Leda','Orus','Zephyr'],gptlive:['vesper','marin','ripple','quartz','willow','stone','gleam','meridian','beacon','delta','cinder','bossa','tempo']};
+const settings={provider:'gemini',voice:true,voiceName:'Puck',color:'theme',pointer:'arrow',eyeStyle:'flat',eyeSize:1,cursorSize:44,showCursor:true,followMouse:true,computerControl:false,notes:false,autoSleep:5,monitor:'auto',personality:'',volume:1,replyMode:'talk',open:{stt:{baseUrl:'http://127.0.0.1:8000/v1',model:'Systran/faster-whisper-small'},llm:{baseUrl:'http://127.0.0.1:11434/v1',model:'qwen3-vl:8b'},tts:{baseUrl:'http://127.0.0.1:8000/v1',model:'speaches-ai/piper-en_GB-alan-medium',voice:'alan'}}};
+const keys={openai:null,gemini:null,open:{stt:null,llm:null,tts:null}};
+const providerNames={open:'Open · free',openai:'OpenAI Realtime',gemini:'Gemini',gptlive:'GPT-Live'};
+const voices={open:['alan'],openai:['marin','cedar','alloy','ash','ballad','coral','echo','sage','shimmer','verse'],gemini:['Puck','Kore','Charon','Fenrir','Aoede','Leda','Orus','Zephyr'],gptlive:['vesper','marin','ripple','quartz','willow','stone','gleam','meridian','beacon','delta','cinder','bossa','tempo']};
 const keyProvider=()=>settings.provider==='gemini'?'gemini':'openai';
+const openPresets={
+  local:{stt:{baseUrl:'http://127.0.0.1:8000/v1',model:'Systran/faster-whisper-small'},llm:{baseUrl:'http://127.0.0.1:11434/v1',model:'qwen3-vl:8b'},tts:{baseUrl:'http://127.0.0.1:8000/v1',model:'speaches-ai/piper-en_GB-alan-medium',voice:'alan'}},
+  groq:{stt:{baseUrl:'https://api.groq.com/openai/v1',model:'whisper-large-v3-turbo'},llm:{baseUrl:'https://api.groq.com/openai/v1',model:'qwen/qwen3.8-27b'}},
+  openrouter:{llm:{baseUrl:'https://openrouter.ai/api/v1',model:'qwen/qwen3-vl-8b-instruct'}}
+};
 let captionText='',captionFinished=false;
 let theme=defaultTheme,swatchKey='';
 function notice(message,persistent=false){clearTimeout(noticeTimer);$('notice').textContent=message;$('notice').hidden=!message;if(message&&!persistent)noticeTimer=setTimeout(()=>$('notice').hidden=true,7000);}
@@ -71,10 +76,12 @@ function syncSegments(){
   }
 }
 function applySettings(update){
-  const {theme:nextTheme,keys:nextKeys,hasKey,...values}=update;Object.assign(settings,values);
+  const {theme:nextTheme,keys:nextKeys,hasKey,...values}=update;
+  if(values.open){const previousOpen=settings.open,nextOpen={...previousOpen};for(const endpoint of ['stt','llm','tts'])nextOpen[endpoint]={...previousOpen[endpoint],...(values.open[endpoint]||{})};settings.open=nextOpen;delete values.open;}
+  Object.assign(settings,values);
   if(settings.provider==='gptlive')settings.voice=true;
   audio.setDuplex(settings.provider==='gptlive');
-  const choices=voices[settings.provider];
+  const choices=voices[settings.provider]||voices.gemini;
   if(!choices.includes(settings.voiceName))settings.voiceName=choices[0];
   const voicePicker=$('voiceName');
   if(voicePicker.dataset.provider!==settings.provider){
@@ -83,7 +90,10 @@ function applySettings(update){
   }
   $('voice').disabled=settings.provider==='gptlive';
   $('voice-help').textContent=settings.provider==='gptlive'?'GPT-Live always speaks. Captions stay visible while you listen.':'Spoken replies with full captions. Turn off for captions and a quiet chirp.';
-  for(const provider of Object.keys(providerNames))$(`${provider}-pricing`).hidden=provider!==settings.provider;
+  for(const provider of Object.keys(providerNames))if($(`${provider}-pricing`))$(`${provider}-pricing`).hidden=provider!==settings.provider;
+  $('voiceName').hidden=settings.provider==='open';
+  $('voiceName').previousElementSibling.hidden=settings.provider==='open';
+  $('open-advanced').hidden=settings.provider!=='open';
   for(const rig of [avatar,pairAvatar]){rig.setColor(settings.color);rig.setEyeStyle(settings.eyeStyle);rig.setEyeSize(settings.eyeSize);}
   if(nextTheme){theme=applyTheme(nextTheme);avatar.setTheme(theme);pairAvatar.setTheme(theme);}
   pointerPicker.update(settings,theme);
@@ -97,6 +107,10 @@ function applySettings(update){
     else if(document.activeElement!==control)control.value=settings[control.name]??'';
   }
   $('session-notes').checked=settings.notes;
+  for(const control of document.querySelectorAll('[data-open-setting]')){
+    const [endpoint,field]=control.dataset.openSetting.split('.');
+    if(document.activeElement!==control)control.value=settings.open[endpoint][field]??'';
+  }
   setState(state);
   $('cursorSize-value').value=`${settings.cursorSize}px`;
   $('eyeSize-value').value=`${Math.round(settings.eyeSize*100)}%`;
@@ -110,6 +124,15 @@ function changeSettings(update){
   if(update.computerControl===true&&!settings.computerControl&&!window.confirm('Enable computer control? Pip can click, type, press keys, scroll, drag, and open apps or links on your desktop when asked. He announces hard-to-undo actions, treats screen text as information rather than instructions, refuses SUPER shortcuts and password fields, and releases a drag when you move your mouse. CTRL + ALT + S stops him. These guardrails do not make mistakes impossible.')){applySettings(settings);return;}
   if(update.provider){update.voiceName=voices[update.provider][0];if(update.provider==='gptlive')update.voice=true;}
   applySettings(update);if(!send({t:'settings',...update}))notice('Reconnect to your computer to save these preferences.');
+}
+function changeOpenSettings(open){
+  applySettings({open});
+  if(!send({t:'settings',open:settings.open}))notice('Reconnect to your computer to save these preferences.');
+}
+function applyOpenPreset(preset){
+  const update={...settings.open,...openPresets[preset]};
+  for(const endpoint of ['stt','llm','tts'])update[endpoint]={...settings.open[endpoint],...(openPresets[preset][endpoint]||{})};
+  changeOpenSettings(update);
 }
 function status(text){$('connection').textContent=connected?'':text;$('connection').hidden=connected||!text;if(!connected)$('setup-note').hidden=true;$('session-host').textContent=connected?host:text;$('session-toggle').disabled=!connected;$('say-hi').disabled=!connected;}
 async function keepAwake(){
@@ -159,15 +182,23 @@ function connect(){
   };
 }
 function keyStatus(packet={}){
-  if(packet.keys)Object.assign(keys,packet.keys);
-  if(typeof packet.hasKey==='boolean')keys[keyProvider()]=packet.hasKey;
-  for(const provider of Object.keys(keys)){
-    const saved=keys[provider],selected=provider===keyProvider(),name=provider==='openai'?'OpenAI':providerNames[provider];
+  if(packet.keys){
+    if(packet.keys.open)Object.assign(keys.open,packet.keys.open);
+    for(const provider of ['openai','gemini'])if(provider in packet.keys)keys[provider]=packet.keys[provider];
+  }
+  if(typeof packet.hasKey==='boolean'&&settings.provider!=='open')keys[keyProvider()]=packet.hasKey;
+  for(const provider of ['openai','gemini']){
+    const saved=keys[provider],selected=provider===keyProvider()&&settings.provider!=='open',name=provider==='openai'?'OpenAI':'Gemini';
     $(`${provider}-key-form`).classList.toggle('needed',selected&&saved===false);
     $(`${provider}-key-status`).textContent=saved===null?'Checking saved key…':saved?'Key saved on your computer.':`No ${name} key saved.`;
   }
+  for(const endpoint of ['stt','llm','tts']){
+    const saved=keys.open[endpoint],field=$(`open-${endpoint}-key-form`);
+    $(`open-${endpoint}-key-status`).textContent=saved===null?'Checking saved key…':saved?'Optional key saved on your computer.':'No key saved (optional).';
+    field.classList.remove('needed');
+  }
   const saved=keys[keyProvider()],name=providerNames[settings.provider],keyName=keyProvider()==='openai'?'OpenAI':'Gemini';
-  $('brain-status').textContent=saved===null?'Connect to your computer to check saved keys.':saved?`${name} is ready with your ${keyName} key.`:`Add your ${keyName} key below to use ${name}.`;
+  $('brain-status').textContent=settings.provider==='open'?'Ready to use local or remote OpenAI-compatible services; API keys are optional.':saved===null?'Connect to your computer to check saved keys.':saved?`${name} is ready with your ${keyName} key.`:`Add your ${keyName} key below to use ${name}.`;
 }
 function showGestureHint(){if(!connected||storage.get('gestureHint')||document.querySelector('.sheet:not([hidden])'))return;$('gesture-hint').hidden=false;storage.set('gestureHint','1');setTimeout(()=>$('gesture-hint').hidden=true,9000);}
 function openSheet(id){cancelHold();touches.clear();gesture=null;$('face-screen').inert=true;$('pairing').inert=true;for(const sheet of document.querySelectorAll('.sheet'))sheet.hidden=sheet.id!==id;enter($(id));$(id).querySelector('button,input,textarea')?.focus({preventScroll:true});}
@@ -183,7 +214,7 @@ document.addEventListener('keydown',event=>{
 });
 $('volume').oninput=()=>changeSettings({volume:Number($('volume').value)});
 $('say-hi').onclick=()=>{audio.unlock();send({t:state==='asleep'?'wake':'sayHi'});};
-for(const provider of Object.keys(keys)){
+for(const provider of ['openai','gemini']){
   $(`${provider}-key-form`).onsubmit=event=>{
     event.preventDefault();const input=$(`${provider}-key`),key=input.value.trim();
     if(!key){notice(`Enter your ${providerNames[provider]} API key first.`);input.focus();return;}
@@ -191,9 +222,20 @@ for(const provider of Object.keys(keys)){
     else notice('Connect to your computer before saving a key.');
   };
 }
+for(const button of document.querySelectorAll('[data-open-key-save]'))button.onclick=()=>{
+  const endpoint=button.dataset.openKeySave,input=$(`open-${endpoint}-key`),key=input.value.trim();
+  if(!key){notice('Enter an API key first.');input.focus();return;}
+  if(send({t:'setKey',provider:'open',endpoint,key})){input.value='';$(`open-${endpoint}-key-status`).textContent='Key sent. Waiting for confirmation…';}
+  else notice('Connect to your computer before saving a key.');
+};
 $('settings-form').onsubmit=event=>event.preventDefault();
 $('settings-form').onchange=event=>{const control=event.target,key=control.name;if(!key)return;changeSettings({[key]:control.type==='checkbox'?control.checked:control.type==='range'||key==='autoSleep'?Number(control.value):control.value});};
 $('settings-form').oninput=event=>{const control=event.target;if(control.name==='cursorSize')$('cursorSize-value').value=`${control.value}px`;if(control.name==='eyeSize')changeSettings({eyeSize:Number(control.value)});};
+for(const control of document.querySelectorAll('[data-open-setting]'))control.onchange=()=>{
+  const [endpoint,field]=control.dataset.openSetting.split('.');
+  changeOpenSettings({[endpoint]:{[field]:control.value}});
+};
+for(const button of document.querySelectorAll('[data-open-preset]'))button.onclick=()=>applyOpenPreset(button.dataset.openPreset);
 function renderSwatches(){
   const key=['accent','red','green','cyan','magenta','yellow'].map(k=>theme[k]).join('|');if(swatchKey===key)return;swatchKey=key;
   const swatches=$('color-swatches');swatches.replaceChildren();

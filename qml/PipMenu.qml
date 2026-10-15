@@ -13,8 +13,8 @@ PopupWindow {
     property bool open: false
     property string qrPath: ""
     property string qrError: ""
-    property string generatedUrl: ""
     property bool confirmComputerControl: false
+    property bool openAdvanced: false
     readonly property var failingChecks: (client.status.checks || []).filter(function(check) { return !check.ok })
     property var previewRig: Pip.createRig(7320)
     property int previewFrame: 0
@@ -31,7 +31,7 @@ PopupWindow {
     readonly property string pairUrl: client.status.pairUrl || ""
     readonly property bool hasPhone: client.status.phones && client.status.phones.length > 0
     readonly property string provider: client.settings.provider || client.status.provider || "gemini"
-    readonly property var brains: [{value:"gemini",label:"Gemini · free"},{value:"openai",label:"OpenAI Realtime"},{value:"gptlive",label:"GPT-Live"}]
+    readonly property var brains: [{value:"open",label:"Open · free"},{value:"gemini",label:"Gemini · free"},{value:"openai",label:"OpenAI Realtime"},{value:"gptlive",label:"GPT-Live"}]
     readonly property var voices: provider === "gemini" ? ["Puck","Kore","Charon","Fenrir","Aoede","Leda","Orus","Zephyr"] : provider === "gptlive" ? ["vesper","marin","ripple","quartz","willow","stone","gleam","meridian","beacon","delta","cinder","bossa","tempo"] : ["marin","cedar","alloy","ash","ballad","coral","echo","sage","shimmer","verse"]
     readonly property string voiceName: voices.indexOf(client.settings.voiceName) >= 0 ? client.settings.voiceName : voices[0]
     readonly property string pricingUrl: provider === "gemini" ? "https://ai.google.dev/gemini-api/docs/pricing" : provider === "gptlive" ? "https://developers.openai.com/api/docs/models/gpt-live-1" : "https://developers.openai.com/api/docs/models/gpt-realtime-2.1"
@@ -44,9 +44,21 @@ PopupWindow {
     visible: open
     implicitWidth: Math.min(420, screenInfo ? screenInfo.width - edge * 2 : 420)
     implicitHeight: Math.min(780, contents.implicitHeight + padding * 2, screenInfo ? screenInfo.height - (bar ? bar.barSize : 0) - edge * 2 : 780)
-    function close() { if (owner && owner.close) owner.close(); else open = false }
     function setting(key, value) { var message = {ev:"settings"}; message[key] = value; client.send(message) }
-    function control(cmd) { client.send({ev:"ctl",cmd:cmd}) }
+    function openField(endpoint, key, value) {
+        var defaults={stt:{baseUrl:"http://127.0.0.1:8000/v1",model:"Systran/faster-whisper-small"},llm:{baseUrl:"http://127.0.0.1:11434/v1",model:"qwen3-vl:8b"},tts:{baseUrl:"http://127.0.0.1:8000/v1",model:"speaches-ai/piper-en_GB-alan-medium",voice:"alan"}}
+        var current=client.settings.open || {},update={stt:Object.assign({},defaults.stt,current.stt || {}),llm:Object.assign({},defaults.llm,current.llm || {}),tts:Object.assign({},defaults.tts,current.tts || {})}
+        update[endpoint][key]=value
+        setting("open",update)
+    }
+    function openPreset(name) {
+        var local={stt:{baseUrl:"http://127.0.0.1:8000/v1",model:"Systran/faster-whisper-small"},llm:{baseUrl:"http://127.0.0.1:11434/v1",model:"qwen3-vl:8b"},tts:{baseUrl:"http://127.0.0.1:8000/v1",model:"speaches-ai/piper-en_GB-alan-medium",voice:"alan"}}
+        var groq={stt:{baseUrl:"https://api.groq.com/openai/v1",model:"whisper-large-v3-turbo"},llm:{baseUrl:"https://api.groq.com/openai/v1",model:"qwen/qwen3.8-27b"}}
+        var openrouter={llm:{baseUrl:"https://openrouter.ai/api/v1",model:"qwen/qwen3-vl-8b-instruct"}}
+        var selected=name==="local" ? local : name==="groq" ? groq : openrouter
+        var current=client.settings.open || {},update={stt:Object.assign({},local.stt,current.stt || {},selected.stt || {}),llm:Object.assign({},local.llm,current.llm || {},selected.llm || {}),tts:Object.assign({},local.tts,current.tts || {},selected.tts || {})}
+        setting("open",update)
+    }
     function launchFix(command) {
         var quoted = "'" + command.replace(/'/g, "'\\''") + "'"
         Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation",
@@ -148,7 +160,7 @@ PopupWindow {
                     PipButton { width:parent.width; implicitHeight:44; text:"Check again"; enabled:root.client.connected; onClicked:root.control("check"); Accessible.role:Accessible.Button; Accessible.name:text; Accessible.onPressAction:clicked() }
                 }
                 Text { width:parent.width; textFormat:Text.PlainText; text:!root.client.connected ? "Connecting to your desktop…" : root.hasPhone ? root.client.status.phones.join(", ")+" is connected" : "Your phone is Pip’s home. Pair it below."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
-                Text { width:parent.width; textFormat:Text.PlainText; text:(root.client.status.state || "asleep").toUpperCase()+"  ·  "+(root.client.status.provider || root.provider).toUpperCase()+" KEY "+(root.client.status.hasKey ? "SAVED" : "NOT SET"); wrapMode:Text.WordWrap; color:PipTheme.tertiary; font.family:PipTheme.tokens.font.mono.family; font.pixelSize:PipTheme.tokens.font.mono.size; font.letterSpacing:0.92 }
+                Text { width:parent.width; textFormat:Text.PlainText; text:(root.client.status.state || "asleep").toUpperCase()+"  ·  "+(root.client.status.provider || root.provider).toUpperCase()+(root.provider === "open" ? " READY" : " KEY "+(root.client.status.hasKey ? "SAVED" : "NOT SET")); wrapMode:Text.WordWrap; color:PipTheme.tertiary; font.family:PipTheme.tokens.font.mono.family; font.pixelSize:PipTheme.tokens.font.mono.size; font.letterSpacing:0.92 }
                 Text { text:"PAIR YOUR PHONE"; color:PipTheme.tertiary; font.family:PipTheme.tokens.font.mono.family; font.pixelSize:PipTheme.tokens.font.mono.size; font.letterSpacing:0.92 }
                 PipButton {
                     width:parent.width; visible:!root.phoneServing; text:"Set up phone access"; enabled:root.client.connected
@@ -186,9 +198,78 @@ PopupWindow {
                         }
                     }
                 }
-                Text { width:parent.width; text:root.provider === "gemini" ? "Gemini’s free tier is subject to quotas. Google may use free-tier data to improve its products." : root.provider === "gptlive" ? "Paid · $0.05/minute, plus separately billed backend Responses and tool usage. Uses the same OpenAI key as Realtime." : "Paid · per million tokens: audio $32 input / $64 output; text $4 input / $24 output."; wrapMode:Text.Wrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                 PipButton {
-                    width:parent.width; text:root.provider === "gemini" ? "Gemini pricing & data use" : root.provider === "gptlive" ? "GPT-Live pricing" : "OpenAI Realtime pricing"
+                    width:parent.width; visible:root.provider === "open"; text:root.openAdvanced ? "Hide Open advanced settings" : "Open advanced settings"
+                    enabled:root.client.connected; Accessible.role:Accessible.Button; Accessible.name:text; Accessible.onPressAction:clicked()
+                    onClicked:root.openAdvanced=!root.openAdvanced
+                }
+                Column {
+                    width:parent.width; spacing:12; visible:root.provider === "open" && root.openAdvanced
+                    Accessible.role:Accessible.Grouping; Accessible.name:"Open advanced settings"
+                    Text { width:parent.width; text:"Customize OpenAI-compatible speech and language services. Keys are optional and saved separately for each endpoint."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
+                    Flow {
+                        width:parent.width; spacing:8
+                        Repeater {
+                            model:[{name:"Local defaults",preset:"local"},{name:"Groq STT + LLM",preset:"groq"},{name:"OpenRouter LLM",preset:"openrouter"}]
+                            delegate:PipButton { required property var modelData; width:(contents.width-16)/3; text:modelData.name; enabled:root.client.connected; onClicked:root.openPreset(modelData.preset) }
+                        }
+                    }
+                    Repeater {
+                        model:[{endpoint:"stt",name:"Speech to text (STT)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:8000/v1"},{key:"model",label:"Model",defaultValue:"Systran/faster-whisper-small"}]},{endpoint:"llm",name:"Language model (LLM)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:11434/v1"},{key:"model",label:"Model",defaultValue:"qwen3-vl:8b"}]},{endpoint:"tts",name:"Text to speech (TTS)",fields:[{key:"baseUrl",label:"Base URL",defaultValue:"http://127.0.0.1:8000/v1"},{key:"model",label:"Model",defaultValue:"speaches-ai/piper-en_GB-alan-medium"},{key:"voice",label:"Voice",defaultValue:"alan"}]}]
+                        delegate:Column {
+                            id:openEndpoint
+                            required property var modelData
+                            width:parent.width; spacing:8
+                            Text { text:openEndpoint.modelData.name; color:PipTheme.primary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size; font.weight:Font.DemiBold }
+                            Repeater {
+                                model:openEndpoint.modelData.fields
+                                delegate:Column {
+                                    required property var modelData
+                                    width:openEndpoint.width; spacing:4
+                                    Text { text:modelData.label; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
+                                    Rectangle {
+                                        width:parent.width; height:PipTheme.tokens.control.rowHeight; radius:PipTheme.tokens.radius.control
+                                        color:PipTheme.alpha(PipTheme.foreground,.06); border.width:openValue.activeFocus ? 1 : 0; border.color:PipTheme.accent
+                                        TextInput {
+                                            id:openValue
+                                            anchors.fill:parent; anchors.margins:12; verticalAlignment:TextInput.AlignVCenter
+                                            property var config:root.client.settings.open || ({})
+                                            property var endpointSettings:config[openEndpoint.modelData.endpoint] || ({})
+                                            text:endpointSettings[modelData.key] || modelData.defaultValue
+                                            color:PipTheme.primary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size
+                                            selectByMouse:true; enabled:root.client.connected; activeFocusOnTab:true
+                                            Accessible.name:openEndpoint.modelData.name+" "+modelData.label
+                                            onEditingFinished:root.openField(openEndpoint.modelData.endpoint,modelData.key,text)
+                                        }
+                                    }
+                                }
+                            }
+                            Text { width:parent.width; text:root.client.status.keys && root.client.status.keys.open && root.client.status.keys.open[openEndpoint.modelData.endpoint] ? "Optional key saved on this computer." : "No key saved (optional)."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
+                            Rectangle {
+                                width:parent.width; height:PipTheme.tokens.control.rowHeight; radius:PipTheme.tokens.radius.control
+                                color:PipTheme.alpha(PipTheme.foreground,.06); border.width:openKey.activeFocus ? 1 : 0; border.color:PipTheme.accent
+                                TextInput {
+                                    id:openKey; anchors.fill:parent; anchors.margins:12; verticalAlignment:TextInput.AlignVCenter
+                                    echoMode:TextInput.Password; color:PipTheme.primary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size
+                                    selectByMouse:true; activeFocusOnTab:true; enabled:root.client.connected
+                                    inputMethodHints:Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+                                    Accessible.name:"Optional "+openEndpoint.modelData.endpoint.toUpperCase()+" API key"
+                                    onAccepted:openEndpoint.saveKey()
+                                    Text { anchors.verticalCenter:parent.verticalCenter; visible:!openKey.text; text:"Optional API key"; color:PipTheme.tertiary; font:openKey.font }
+                                }
+                            }
+                            function saveKey() {
+                                var key=openKey.text.trim()
+                                if(root.client.connected && key && root.client.send({ev:"setKey",provider:"open",endpoint:modelData.endpoint,key:key})) openKey.text=""
+                            }
+                            PipButton { width:parent.width; text:"Save optional "+openEndpoint.modelData.endpoint.toUpperCase()+" key"; enabled:root.client.connected && !!openKey.text.trim(); onClicked:openEndpoint.saveKey() }
+                        }
+                    }
+                    Text { width:parent.width; text:"Open always works without keys. Optional keys are stored on your computer and never returned to the phone."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
+                }
+                Text { width:parent.width; text:root.provider === "open" ? "Open · local-first, no key required. Remote services may have their own pricing." : root.provider === "gemini" ? "Gemini’s free tier is subject to quotas. Google may use free-tier data to improve its products." : root.provider === "gptlive" ? "Paid · $0.05/minute, plus separately billed backend Responses and tool usage. Uses the same OpenAI key as Realtime." : "Paid · per million tokens: audio $32 input / $64 output; text $4 input / $24 output."; wrapMode:Text.Wrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
+                PipButton {
+                    width:parent.width; visible:root.provider !== "open"; text:root.provider === "gemini" ? "Gemini pricing & data use" : root.provider === "gptlive" ? "GPT-Live pricing" : "OpenAI Realtime pricing"
                     Accessible.role:Accessible.Link; Accessible.name:text; Accessible.description:"Opens "+root.pricingUrl+" in your browser"; Accessible.onPressAction:clicked()
                     onClicked:Qt.openUrlExternally(root.pricingUrl)
                 }
@@ -200,7 +281,7 @@ PopupWindow {
                 }
                 Text { width:parent.width; text:root.provider === "gptlive" ? "GPT-Live always speaks. Captions stay visible while you listen." : "Spoken replies with full captions. Turn off for captions and a quiet chirp."; wrapMode:Text.Wrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                 Column {
-                    width:parent.width; spacing:8
+                    width:parent.width; spacing:8; visible:root.provider !== "open"
                     Accessible.role:Accessible.Grouping; Accessible.name:"Voice"
                     Text { text:"Voice"; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                     Flow {
@@ -358,7 +439,7 @@ PopupWindow {
                 }
                 Text { width:parent.width; text:"OpenAI Realtime and GPT-Live share your OpenAI key. Keys are saved only on your computer and sent only to their provider. Saving one key does not change the other."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
                 PipButton { width:parent.width; text:"Open meeting notes"; icon:"notes"; enabled:root.client.connected; onClicked:root.client.send({ev:"openNotes"}) }
-                Text { width:parent.width; visible:!root.client.status.hasKey; text:"Add your "+(root.provider === "gemini" ? "Gemini" : "OpenAI")+" key above or from your paired phone to start a conversation."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
+                Text { width:parent.width; visible:root.provider !== "open" && !root.client.status.hasKey; text:"Add your "+(root.provider === "gemini" ? "Gemini" : "OpenAI")+" key above or from your paired phone to start a conversation."; wrapMode:Text.WordWrap; color:PipTheme.secondary; font.family:PipTheme.tokens.font.ui.family; font.pixelSize:PipTheme.tokens.font.ui.size }
             }
         }
     }

@@ -1,6 +1,6 @@
 import { accessSync, constants } from 'node:fs';
 import { join } from 'node:path';
-import { command, object, repoRoot } from './config';
+import { command, object, repoRoot, type Configuration } from './config';
 import { parseIdentity } from './tailscale';
 
 export interface SetupCheck {
@@ -44,7 +44,101 @@ async function platformVersion(env: CheckEnvironment, id: string, name: string, 
   } catch { /* Keep the actionable minimum version if the command is unavailable. */ }
   return check;
 }
-export async function evaluateChecks(env: CheckEnvironment = systemEnvironment, plugin = repoRoot): Promise<SetupCheck[]> {
+const openEndpoints = ['stt', 'llm', 'tts'] as const;
+type OpenEndpoint = typeof openEndpoints[number];
+async function request(url: string, headers: HeadersInit) {
+  return fetch(url, { headers, signal: AbortSignal.timeout(5000) });
+}
+async function openEndpointCheck(configuration: Configuration, endpoint: OpenEndpoint): Promise<SetupCheck> {
+  const service = endpoint.toUpperCase();
+  const settings = configuration.settings.open[endpoint];
+  const baseUrl = settings.baseUrl.replace(/\/+$/, '');
+  const keyValue = configuration.openKey(endpoint);
+  const key: HeadersInit = keyValue ? { authorization: `Bearer ${keyValue}` } : {};
+  const hostname = new URL(baseUrl).hostname;
+  const local = ['localhost', '127.0.0.1', '::1'].includes(hostname);
+  const fix = local && endpoint === 'llm'
+    ? { label: 'Install Ollama', command: 'omarchy pkg add ollama-vulkan' }
+    : local && endpoint !== 'llm'
+      ? { label: 'Start Speaches (CPU)', command: 'docker run --detach --name pip-open-speaches --publish 127.0.0.1:8000:8000 --volume pip-open-hf-cache:/home/ubuntu/.cache/huggingface/hub --env WHISPER__CPU_THREADS=8 --env WHISPER__COMPUTE_TYPE=int8 ghcr.io/speaches-ai/speaches:latest-cpu' }
+      : { label: 'Check endpoint, key and model', command: `Review the ${service} endpoint, key and model in Brain settings.` };
+  const check: SetupCheck = {
+    id: `open-${endpoint}`,
+    ok: false,
+    title: `${service} endpoint`,
+    detail: local && endpoint === 'llm'
+      ? `Ollama is unavailable at ${settings.baseUrl}. Install with "omarchy pkg add ollama-vulkan", then start with "OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 ollama serve".`
+      : `Could not reach the ${service} service at ${settings.baseUrl}.`,
+    fix,
+  };
+  if (endpoint === 'llm') {
+    try {
+      const modelsResponse = await request(`${baseUrl}/models`, key);
+      if (modelsResponse.ok) {
+        const payload = object(await modelsResponse.json());
+        const models = Array.isArray(payload.data) ? payload.data : [];
+        const present = models.some(model => {
+          try { return object(model).id === settings.model; } catch { return false; }
+        });
+        check.ok = present;
+        check.detail = present
+          ? `${service} endpoint is reachable and has the configured model ${settings.model}.`
+          : `${service} endpoint is reachable, but the configured model ${settings.model} is not listed.`;
+        if (present) delete check.fix;
+        else if (local) check.fix = { label: 'Pull configured model', command: `ollama pull ${quote(settings.model)}` };
+        return check;
+      }
+      if (modelsResponse.status === 401 || modelsResponse.status === 403) {
+        check.detail = `${service} endpoint rejected its configured key. Check the endpoint and key in Brain settings.`;
+        return check;
+      }
+      if (local) {
+        const ollamaBase = baseUrl.replace(/\/v1\/?$/, '');
+        const tagsResponse = await request(`${ollamaBase}/api/tags`, key);
+        if (!tagsResponse.ok) {
+          check.detail = `Ollama at ${settings.baseUrl} returned HTTP ${tagsResponse.status}.`;
+          return check;
+        }
+        const payload = object(await tagsResponse.json());
+        const models = Array.isArray(payload.models) ? payload.models : [];
+        const present = models.some(model => {
+          try { return object(model).name === settings.model; } catch { return false; }
+        });
+        check.ok = present;
+        check.detail = present
+          ? `LLM endpoint is reachable and has the configured model ${settings.model}.`
+          : `LLM endpoint is reachable, but the configured model ${settings.model} is not installed.`;
+        if (present) delete check.fix;
+        else check.fix = { label: 'Pull configured model', command: `ollama pull ${quote(settings.model)}` };
+        return check;
+      }
+      check.detail = `${service} endpoint at ${settings.baseUrl} returned HTTP ${modelsResponse.status}. Check the endpoint, key and model in Brain settings.`;
+    } catch (error) {
+      check.detail = `Could not reach the ${service} endpoint at ${settings.baseUrl}: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    return check;
+  }
+  try {
+    let response = await request(`${baseUrl}/models`, key);
+    if (response.status === 404 || response.status === 405) response = await request(new URL('/health', baseUrl).toString(), key);
+    if (response.ok) {
+      check.ok = true;
+      check.detail = `${service} endpoint is reachable at ${settings.baseUrl}.`;
+      delete check.fix;
+    } else if (response.status === 401 || response.status === 403) {
+      check.detail = `${service} endpoint rejected its configured key. Check the endpoint and key in Brain settings.`;
+    } else {
+      check.detail = `${service} endpoint at ${settings.baseUrl} returned HTTP ${response.status}.`;
+    }
+  } catch (error) {
+    check.detail = `Could not reach the ${service} endpoint at ${settings.baseUrl}: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  return check;
+}
+async function openChecks(configuration: Configuration): Promise<SetupCheck[]> {
+  return Promise.all(openEndpoints.map(endpoint => openEndpointCheck(configuration, endpoint)));
+}
+export async function evaluateChecks(env: CheckEnvironment = systemEnvironment, plugin = repoRoot, configuration?: Configuration): Promise<SetupCheck[]> {
   const missing: string[] = [];
   try { await env.run(['pacman', '-Q', ...packages]); }
   catch {
@@ -77,6 +171,7 @@ export async function evaluateChecks(env: CheckEnvironment = systemEnvironment, 
     tailscale,
     await platformVersion(env, 'hyprland', 'Hyprland', '0.56', ['hyprctl', 'version', '-j']),
     await platformVersion(env, 'quickshell', 'Quickshell', '0.3', ['quickshell', '--version']),
+    ...(configuration?.settings.provider === 'open' ? await openChecks(configuration) : []),
   ];
 }
 export class Checks {
@@ -84,11 +179,11 @@ export class Checks {
   onChange: () => void = () => {};
   private timer: NodeJS.Timeout | undefined;
   private refreshing: Promise<void> | undefined;
-  constructor(private environment: CheckEnvironment) {}
+  constructor(private environment: CheckEnvironment, private configuration?: Configuration) {}
   get setup() { return this.items.every(check => check.ok) ? 'ok' : 'finish setup on your computer'; }
   async start() { await this.refresh(); this.timer = setInterval(() => this.refresh(), 5 * 60_000); }
   refresh(): Promise<void> {
-    this.refreshing ??= evaluateChecks(this.environment).then(items => { this.items = items; this.onChange(); }).finally(() => { this.refreshing = undefined; });
+    this.refreshing ??= evaluateChecks(this.environment, repoRoot, this.configuration).then(items => { this.items = items; this.onChange(); }).finally(() => { this.refreshing = undefined; });
     return this.refreshing;
   }
   stop() { clearInterval(this.timer); }

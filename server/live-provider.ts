@@ -51,6 +51,7 @@ export async function liveMessage(value: unknown) {
   return object(JSON.parse(text));
 }
 export function friendlyLiveError(provider: Provider, text: string) {
+  if (provider === 'open') return `Open: ${text.slice(0, 240) || 'Check the speech-to-text, LLM and text-to-speech services in Brain → Advanced.'}`;
   const label = provider === 'gemini' ? 'Gemini' : provider === 'gptlive' ? 'GPT-Live' : 'OpenAI';
   if (provider === 'gemini' && /prepayment credits (?:are )?depleted/i.test(text)) return 'Your Gemini project has billing on and no credits. Use a key from a free-tier project (no billing) or add credits.';
   if (/resource_exhausted|quota|rate.?limit|too many requests|\b429\b|1013/i.test(text)) return provider === 'gemini' ? "Gemini's free limit has been reached. Try again later, or switch to OpenAI in Brain settings." : "OpenAI's usage limit has been reached. Check your API quota or try again later.";

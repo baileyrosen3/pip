@@ -9,22 +9,30 @@ export const configDir = process.env.PIPCTL_CONFIG_DIR || join(process.env.XDG_C
 export const port = Number(process.env.PIPCTL_PORT || 7319);
 export const openaiBase = (process.env.PIPCTL_OPENAI_BASE || 'https://api.openai.com/v1').replace(/\/$/, '');
 export const geminiBase = (process.env.PIPCTL_GEMINI_BASE || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
-export type Provider = 'openai' | 'gemini' | 'gptlive';
-export function isProvider(value: unknown): value is Provider { return value === 'openai' || value === 'gemini' || value === 'gptlive'; }
+export type Provider = 'open' | 'openai' | 'gemini' | 'gptlive';
+export type OpenEndpoint = 'stt' | 'llm' | 'tts';
+export type OpenSettings = { stt: { baseUrl: string; model: string }; llm: { baseUrl: string; model: string }; tts: { baseUrl: string; model: string; voice: string } };
+export const openDefaults: OpenSettings = {
+  stt: { baseUrl: 'http://127.0.0.1:8000/v1', model: 'Systran/faster-whisper-small' },
+  llm: { baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3-vl:8b' },
+  tts: { baseUrl: 'http://127.0.0.1:8000/v1', model: 'speaches-ai/piper-en_GB-alan-medium', voice: 'alan' },
+};
+export function isProvider(value: unknown): value is Provider { return value === 'open' || value === 'openai' || value === 'gemini' || value === 'gptlive'; }
 export const providerVoices: Record<Provider, readonly string[]> = {
+  open: ['alan'],
   openai: ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'],
   gemini: ['Puck', 'Kore', 'Charon', 'Fenrir', 'Aoede', 'Leda', 'Orus', 'Zephyr'],
   gptlive: ['vesper', 'marin', 'ripple', 'quartz', 'willow', 'stone', 'gleam', 'meridian', 'beacon', 'delta', 'cinder', 'bossa', 'tempo'],
 };
-export const defaultVoice: Record<Provider, string> = { openai: 'marin', gemini: 'Puck', gptlive: 'vesper' };
+export const defaultVoice: Record<Provider, string> = { open: 'alan', openai: 'marin', gemini: 'Puck', gptlive: 'vesper' };
 const allVoices = new Set(Object.values(providerVoices).flat());
 export type PointerTrail = 'ribbon' | 'sparkles' | 'none';
 export type PointerType = 'arrow' | 'orb' | 'eyes' | 'face';
 /// When Pip answers: `talk` = whenever you finish speaking; `name` = when you say "Pip"; `hold` = only while you hold the phone screen.
 export type ReplyMode = 'talk' | 'name' | 'hold';
-export const defaults = { cursorSize: 44, glow: false, showCursor: true, phonePosition: 0.5, followMouse: true, trail: 'none' as PointerTrail, mood: 'listening', computerControl: false, notes: false, autoSleep: 5, monitor: 'auto', personality: '', volume: 1, color: 'theme', pointer: 'arrow' as PointerType, eyeStyle: 'flat' as 'flat' | 'glass' | 'glow', eyeSize: 1, replyMode: 'talk' as ReplyMode, tailscaleServe: false, provider: 'gemini' as Provider, voice: true, voiceName: 'Puck' };
+export const defaults = { cursorSize: 44, glow: false, showCursor: true, phonePosition: 0.5, followMouse: true, trail: 'none' as PointerTrail, mood: 'listening', computerControl: false, notes: false, autoSleep: 5, monitor: 'auto', personality: '', volume: 1, color: 'theme', pointer: 'arrow' as PointerType, eyeStyle: 'flat' as 'flat' | 'glass' | 'glow', eyeSize: 1, replyMode: 'talk' as ReplyMode, tailscaleServe: false, provider: 'gemini' as Provider, voice: true, voiceName: 'Puck', open: openDefaults };
 export type Settings = typeof defaults;
-export type Secrets = { openaiKey: string; geminiKey: string; pairToken: string };
+export type Secrets = { openaiKey: string; geminiKey: string; pairToken: string; open: Record<OpenEndpoint, string> };
 
 export function atomicJSON(path: string, value: unknown, mode = 0o600) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -50,6 +58,26 @@ export function settingsPatch(input: unknown): Partial<Settings> {
     if (typeof value === 'number' && !Number.isFinite(value)) throw new Error(`Invalid setting: ${key}`);
     patch[key] = value;
   }
+  if ('open' in patch) {
+    const raw = object(patch.open);
+    const endpoints = structuredClone(openDefaults);
+    for (const endpoint of ['stt', 'llm', 'tts'] as const) {
+      if (raw[endpoint] === undefined) continue;
+      const source = object(raw[endpoint]);
+      for (const field of ['baseUrl', 'model', ...(endpoint === 'tts' ? ['voice'] : [])]) {
+        if (source[field] === undefined) continue;
+        if (typeof source[field] !== 'string' || !source[field].trim()) throw new Error(`Open ${endpoint} ${field} must be text.`);
+        const value = source[field].trim();
+        if (field === 'baseUrl') {
+          const url = new URL(value);
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Open endpoint must be an HTTP(S) base URL without credentials, query or fragment.');
+          endpoints[endpoint].baseUrl = value.replace(/\/+$/, '');
+        } else if (field === 'model') endpoints[endpoint].model = value;
+        else if (endpoint === 'tts') endpoints.tts.voice = value;
+      }
+    }
+    patch.open = endpoints;
+  }
   if ('color' in patch && patch.color !== 'theme' && patch.color !== 'accent' && !/^#[a-f\d]{6}$/i.test(String(patch.color))) throw new Error('Color must be theme, accent or #rrggbb.');
   if ('eyeStyle' in patch && !['flat', 'glass', 'glow'].includes(String(patch.eyeStyle))) throw new Error('Eye style must be flat, glass or glow.');
   if (typeof patch.eyeSize === 'number') patch.eyeSize = Math.min(1.5, Math.max(.7, patch.eyeSize));
@@ -57,7 +85,7 @@ export function settingsPatch(input: unknown): Partial<Settings> {
   if ('pointer' in patch && !['arrow', 'orb', 'eyes', 'face'].includes(String(patch.pointer))) throw new Error('Pointer must be arrow, orb, eyes or face.');
   if ('replyMode' in patch && !['talk', 'name', 'hold'].includes(String(patch.replyMode))) throw new Error('Reply mode must be talk, name or hold.');
   if ('autoSleep' in patch && ![0, 5, 10, 30].includes(Number(patch.autoSleep))) throw new Error('Auto-sleep must be off, 5, 10 or 30 minutes.');
-  if ('provider' in patch && !isProvider(patch.provider)) throw new Error('Brain must be openai, gemini or gptlive.');
+  if ('provider' in patch && !isProvider(patch.provider)) throw new Error('Brain must be open, openai, gemini or gptlive.');
   if ('voiceName' in patch && !allVoices.has(String(patch.voiceName))) throw new Error('Choose a supported voice for this brain.');
   if (typeof patch.cursorSize === 'number') patch.cursorSize = Math.min(72, Math.max(28, patch.cursorSize));
   if (typeof patch.phonePosition === 'number') patch.phonePosition = Math.min(1, Math.max(0, patch.phonePosition));
@@ -70,8 +98,9 @@ export class Configuration {
   constructor() {
     mkdirSync(configDir, { recursive: true, mode: 0o700 });
     const saved = load(join(configDir, 'secrets.json'));
-    this.secrets = { openaiKey: typeof saved.openaiKey === 'string' ? saved.openaiKey : '', geminiKey: typeof saved.geminiKey === 'string' ? saved.geminiKey : '', pairToken: typeof saved.pairToken === 'string' && /^[a-f0-9]{64}$/.test(saved.pairToken) ? saved.pairToken : randomBytes(32).toString('hex') };
-    this.settings = { ...defaults, ...settingsPatch(load(join(configDir, 'config.json'))) };
+    const open = saved.open && typeof saved.open === 'object' ? object(saved.open) : {};
+    this.secrets = { openaiKey: typeof saved.openaiKey === 'string' ? saved.openaiKey : '', geminiKey: typeof saved.geminiKey === 'string' ? saved.geminiKey : '', pairToken: typeof saved.pairToken === 'string' && /^[a-f0-9]{64}$/.test(saved.pairToken) ? saved.pairToken : randomBytes(32).toString('hex'), open: { stt: typeof open.stt === 'string' ? open.stt : '', llm: typeof open.llm === 'string' ? open.llm : '', tts: typeof open.tts === 'string' ? open.tts : '' } };
+    this.settings = { ...structuredClone(defaults), ...settingsPatch(load(join(configDir, 'config.json'))) };
     this.normalizeVoice(this.settings);
     atomicJSON(join(configDir, 'secrets.json'), this.secrets);
     atomicJSON(join(configDir, 'config.json'), this.settings);
@@ -81,14 +110,36 @@ export class Configuration {
     if (settings.provider === 'gptlive') settings.voice = true;
   }
   update(input: unknown) {
-    const patch = settingsPatch(input), next = { ...this.settings, ...patch };
+    const raw = object(input), nested = raw.open === undefined ? undefined : object(raw.open);
+    const merged: Record<string, unknown> = { ...raw };
+    const endpointKeys: Partial<Record<OpenEndpoint, string>> = {};
+    if (nested) {
+      const open = structuredClone(this.settings.open);
+      for (const endpoint of ['stt', 'llm', 'tts'] as const) if (nested[endpoint] !== undefined) {
+        const value = object(nested[endpoint]);
+        if (value.key !== undefined) {
+          if (typeof value.key !== 'string') throw new Error(`Open ${endpoint} key must be text.`);
+          endpointKeys[endpoint] = value.key;
+        }
+        Object.assign(open[endpoint], value);
+      }
+      merged.open = open;
+    }
+    const patch = settingsPatch(merged), next = { ...this.settings, ...patch };
     if (patch.voiceName !== undefined && !providerVoices[next.provider].includes(patch.voiceName)) throw new Error('That voice is not available for this brain.');
+    for (const endpoint of ['stt', 'llm', 'tts'] as const) if (endpointKeys[endpoint] !== undefined) this.setKey(endpointKeys[endpoint], 'open', endpoint);
     this.normalizeVoice(next); Object.assign(this.settings, next); atomicJSON(join(configDir, 'config.json'), this.settings); return this.settings;
   }
-  setKey(key: string, provider: Provider) { if (provider === 'gemini') this.secrets.geminiKey = key.trim(); else this.secrets.openaiKey = key.trim(); atomicJSON(join(configDir, 'secrets.json'), this.secrets); }
-  key(provider: Provider = this.settings.provider) { return provider === 'gemini' ? this.secrets.geminiKey : this.secrets.openaiKey; }
-  get keys() { return { openai: !!this.secrets.openaiKey, gemini: !!this.secrets.geminiKey }; }
-  get hasKey() { return !!this.key(); }
+  setKey(key: string, provider: Provider, endpoint?: OpenEndpoint) {
+    if (provider === 'open') { if (!endpoint) throw new Error('Choose STT, LLM or TTS for this key.'); this.secrets.open[endpoint] = key.trim(); }
+    else if (provider === 'gemini') this.secrets.geminiKey = key.trim();
+    else this.secrets.openaiKey = key.trim();
+    atomicJSON(join(configDir, 'secrets.json'), this.secrets);
+  }
+  openKey(endpoint: OpenEndpoint) { return this.secrets.open[endpoint]; }
+  key(provider: Provider = this.settings.provider) { return provider === 'open' ? '' : provider === 'gemini' ? this.secrets.geminiKey : this.secrets.openaiKey; }
+  get keys() { return { openai: !!this.secrets.openaiKey, gemini: !!this.secrets.geminiKey, open: { stt: !!this.secrets.open.stt, llm: !!this.secrets.open.llm, tts: !!this.secrets.open.tts } }; }
+  get hasKey() { return this.settings.provider === 'open' || !!this.key(); }
   authorized(token: string) {
     const expected = Buffer.from(this.secrets.pairToken);
     const candidate = Buffer.from(token);
