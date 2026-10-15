@@ -67,7 +67,7 @@ async function openEndpointCheck(configuration: Configuration, endpoint: OpenEnd
     ok: false,
     title: `${service} endpoint`,
     detail: local && endpoint === 'llm'
-      ? `Ollama is unavailable at ${settings.baseUrl}. Install with "omarchy pkg add ollama-vulkan", then start with "OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 ollama serve".`
+      ? `Ollama is unavailable at ${settings.baseUrl}. Install with "omarchy pkg add ollama-vulkan", then start with "OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve".`
       : `Could not reach the ${service} service at ${settings.baseUrl}.`,
     fix,
   };

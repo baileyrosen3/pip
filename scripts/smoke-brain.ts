@@ -1,4 +1,5 @@
 import { startServer, type BrainKind } from '../tests/harness';
+import { defaults } from '../server/config';
 import type { Phone } from '../tests/harness/phone';
 
 /** Opt-in paid API check. All desktop operations use the isolated, non-interactive fake helper. */
@@ -11,9 +12,10 @@ export async function smokeBrain(kind: BrainKind) {
     for (const key of [openai, gemini]) if (key) text = text.replaceAll(key, '[REDACTED]');
     return text.replace(/sk-[A-Za-z0-9_-]+|AIza[A-Za-z0-9_-]+/g, '[REDACTED]');
   };
+  // The Open brain talks to the real local services at their default addresses (see README).
   const pip = await startServer({
     brain: { kind, baseURL: '' }, keys: { openai, gemini }, desktop: 'fake',
-    settings: { voice: true, autoSleep: 0, notes: false, computerControl: false },
+    settings: { voice: true, autoSleep: 0, notes: false, computerControl: false, ...(kind === 'open' ? { open: defaults.open } : {}) },
   });
   let phone: Phone | undefined;
   let timer: NodeJS.Timeout | undefined;

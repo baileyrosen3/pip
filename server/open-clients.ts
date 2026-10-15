@@ -58,7 +58,7 @@ export class OpenClients {
       if (signal.aborted) throw error;
       const service = endpoint === 'llm' ? 'LLM' : endpoint === 'stt' ? 'speech-to-text' : 'text-to-speech';
       const local = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(settings.baseUrl).hostname);
-      const fix = local ? endpoint === 'llm' ? `Start Ollama: OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 ollama serve; pull the model: ollama pull ${settings.model}.` : 'Start Speaches: docker start pip-open-speaches (see README Open brain setup).' : 'Check its base URL, model and optional API key in Brain → Advanced.';
+      const fix = local ? endpoint === 'llm' ? `Start Ollama: OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve; pull the model: ollama pull ${settings.model}.` : 'Start Speaches: docker start pip-open-speaches (see README Open brain setup).' : 'Check its base URL, model and optional API key in Brain → Advanced.';
       throw new Error(`Open ${service} service unavailable (${message(error)}). ${fix}`);
     }
   }
@@ -71,8 +71,7 @@ export class OpenClients {
   }
   async *chat(messages: Record<string, unknown>[], tools: Record<string, unknown>[], signal: AbortSignal) {
     const settings = this.config.settings.open.llm;
-    const localQwen = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(settings.baseUrl).hostname) && /^qwen3/i.test(settings.model);
-    const response = await this.request('llm', '/chat/completions', { model: settings.model, messages, tools, stream: true, ...(localQwen ? { reasoning_effort: 'none' } : {}) }, signal);
+    const response = await this.request('llm', '/chat/completions', { model: settings.model, messages, tools, stream: true }, signal);
     if (!response.body) throw new Error('Open LLM returned no chat stream.');
     const reader = response.body.getReader(), decoder = new TextDecoder(); let pending = '';
     try {

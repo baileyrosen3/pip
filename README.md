@@ -158,12 +158,21 @@ Install Ollama's Vulkan build on Omarchy, pull the vision model, and start it wi
 
 ```bash
 omarchy pkg add ollama-vulkan
-OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 ollama serve
+OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
 # In another terminal:
-ollama pull qwen3-vl:8b
+ollama pull qwen3-vl:8b-instruct
 ```
 
-The integrated-GPU flag matters on AMD Radeon 890M: Vulkan support alone may still select the CPU. Ollama listens at `http://127.0.0.1:11434/v1`. Pip disables hidden reasoning for local Qwen models to keep spoken answers short and prompt.
+The integrated-GPU flag matters on AMD Radeon 890M: without it Ollama may use the CPU. The context length keeps memory use reasonable (Ollama otherwise reserves about 36 GB for this model). Use the `-instruct` model: the plain `qwen3-vl:8b` tag is a thinking model that writes a long hidden answer first, and that can't be turned off, so it takes 10+ seconds even for "what's the capital of France". Ollama listens at `http://127.0.0.1:11434/v1`.
+
+Measured on the Ryzen AI 9 HX 370 / Radeon 890M, warm, median of 3:
+
+| Model | Simple question | Picks the screen tool | Question about a screenshot |
+|---|---|---|---|
+| `qwen3-vl:8b-instruct` (default) | 0.23 s to first word, 0.42 s total | 3 of 3 | about 12 s to first word |
+| `qwen3-vl:30b-a3b-instruct` | 0.36 s, 2.8 s total (went off and "researched") | 1 of 3 | kept asking for another screenshot |
+
+Screenshot questions are slow on an integrated GPU because the image has to be processed first; plain questions are quick.
 
 Run [Speaches](https://github.com/speaches-ai/speaches) for speech-to-text and speech on the CPU (Docker must already be installed and available to your user):
 
@@ -180,7 +189,7 @@ This binds only to loopback, not your LAN. Downloads and first model loads need 
 | Endpoint | Base URL | Model / voice |
 |---|---|---|
 | Speech-to-text | `http://127.0.0.1:8000/v1` | `Systran/faster-whisper-small` |
-| Chat, tools and screen images | `http://127.0.0.1:11434/v1` | `qwen3-vl:8b` |
+| Chat, tools and screen images | `http://127.0.0.1:11434/v1` | `qwen3-vl:8b-instruct` |
 | Text-to-speech | `http://127.0.0.1:8000/v1` | `speaches-ai/piper-en_GB-alan-medium`, voice `alan` |
 
 Download the speech models once the container is ready:
